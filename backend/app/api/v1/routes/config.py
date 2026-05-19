@@ -88,6 +88,8 @@ _ALLOWED_OVERRIDE_FIELDS = {
     "enable_image_to_video",
     "video_image_mode",
     "video_inline_local_images",
+    "fake_video_fixture_url",
+    "fake_video_fixture_path",
     "doubao_api_key",
     "doubao_video_model",
     "doubao_video_duration",

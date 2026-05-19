@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+	createShapeId,
 	type Editor,
 	type TLComponents,
 	Tldraw,
+	type TLShape,
+	type TLShapeId,
 	type TLShapePartial,
 } from "tldraw";
 import "tldraw/tldraw.css";
@@ -51,13 +54,204 @@ const components: TLComponents = {
 	ContextMenu: null,
 };
 
-/** Shape types from the old monolithic layout that should be cleaned up */
+const PROJECTED_SHAPE_TYPES = new Set([
+	"plan-section",
+	"character-section",
+	"storyboard-section",
+	"compose-section",
+]);
+
 const STALE_SHAPE_TYPES = new Set([
 	"connector",
 	"ConnectorShape",
-	"arrow",
 	"storyboard-board",
+	"script-section",
+	"video-section",
 ]);
+
+const WORKFLOW_ARROW_META = "openoii-workflow-arrow";
+const MANUAL_POSITION_META = "manualPosition";
+const CARD_PADDING = 32;
+
+interface ShapeBounds {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
+function getShapeSize(shape: TLShapePartial | TLShape): { w: number; h: number } {
+	const props = shape.props as { w?: number; h?: number } | undefined;
+	return {
+		w: props?.w ?? 420,
+		h: props?.h ?? 260,
+	};
+}
+
+function toBounds(shape: TLShapePartial | TLShape): ShapeBounds {
+	const size = getShapeSize(shape);
+	return {
+		x: shape.x ?? 0,
+		y: shape.y ?? 0,
+		w: size.w,
+		h: size.h,
+	};
+}
+
+function boundsOverlap(a: ShapeBounds, b: ShapeBounds): boolean {
+	return !(
+		a.x + a.w + CARD_PADDING <= b.x ||
+		b.x + b.w + CARD_PADDING <= a.x ||
+		a.y + a.h + CARD_PADDING <= b.y ||
+		b.y + b.h + CARD_PADDING <= a.y
+	);
+}
+
+function isManualShape(
+	shape: TLShape | TLShapePartial | undefined,
+	lastProjected?: { x: number; y: number },
+): boolean {
+	if (!shape) return false;
+	if (shape.meta?.[MANUAL_POSITION_META] === true) return true;
+	if (!lastProjected) return false;
+	return shape.x !== lastProjected.x || shape.y !== lastProjected.y;
+}
+
+function avoidCollisions(
+	desired: TLShapePartial,
+	occupied: ShapeBounds[],
+): TLShapePartial {
+	let next = { ...desired };
+	let guard = 0;
+	while (occupied.some((bounds) => boundsOverlap(toBounds(next), bounds))) {
+		const size = getShapeSize(next);
+		next = { ...next, y: (next.y ?? 0) + size.h + CARD_PADDING };
+		guard += 1;
+		if (guard > 50) break;
+	}
+	occupied.push(toBounds(next));
+	return next;
+}
+
+function resolveShapeLayout(
+	desiredShapes: TLShapePartial[],
+	existingShapes: TLShape[],
+	lastProjected: Map<string, { x: number; y: number }>,
+): TLShapePartial[] {
+	const existingMap = new Map(existingShapes.map((shape) => [shape.id, shape]));
+	const occupied = existingShapes
+		.filter((shape) => !PROJECTED_SHAPE_TYPES.has(shape.type))
+		.map(toBounds);
+	const resolved: TLShapePartial[] = [];
+
+	for (const desired of desiredShapes) {
+		const existing = existingMap.get(desired.id);
+		const manual = isManualShape(existing, lastProjected.get(desired.id));
+		const next = manual
+			? ({ ...desired, x: existing.x, y: existing.y, meta: existing.meta } as TLShapePartial)
+			: avoidCollisions(desired, occupied);
+		if (manual) occupied.push(toBounds(next));
+		resolved.push(next);
+	}
+
+	return resolved;
+}
+
+function workflowArrowId(fromId: TLShapeId, toId: TLShapeId): TLShapeId {
+	return createShapeId(`workflow-${fromId.replace("shape:", "")}-to-${toId.replace("shape:", "")}`);
+}
+
+function syncWorkflowArrows(editor: Editor, cardShapes: TLShapePartial[]) {
+	const orderedCards = cardShapes.filter((shape) =>
+		PROJECTED_SHAPE_TYPES.has(shape.type ?? ""),
+	);
+	const desiredPairs = orderedCards.slice(0, -1).map((shape, index) => ({
+		fromId: shape.id as TLShapeId,
+		toId: orderedCards[index + 1]?.id as TLShapeId,
+	}));
+	const desiredArrowIds = new Set(
+		desiredPairs.map((pair) => workflowArrowId(pair.fromId, pair.toId)),
+	);
+	const currentArrows = editor
+		.getCurrentPageShapes()
+		.filter(
+			(shape) =>
+				shape.type === "arrow" &&
+				shape.meta?.[WORKFLOW_ARROW_META] === true,
+		);
+	const staleArrowIds = currentArrows
+		.filter((shape) => !desiredArrowIds.has(shape.id))
+		.map((shape) => shape.id);
+
+	if (staleArrowIds.length > 0) {
+		editor.deleteShapes(staleArrowIds);
+	}
+
+	const existingArrowIds = new Set(
+		currentArrows.map((shape) => shape.id).filter((id) => !staleArrowIds.includes(id)),
+	);
+	const arrowsToCreate: TLShapePartial[] = [];
+	const bindingsToCreate: Parameters<Editor["createBindings"]>[0] = [];
+
+	for (const [index, pair] of desiredPairs.entries()) {
+		const arrowId = workflowArrowId(pair.fromId, pair.toId);
+		if (existingArrowIds.has(arrowId)) continue;
+		arrowsToCreate.push({
+			id: arrowId,
+			type: "arrow",
+			x: 0,
+			y: 0,
+			meta: { [WORKFLOW_ARROW_META]: true },
+			props: {
+				kind: "arc",
+				bend: index % 2 === 0 ? 48 : -48,
+				color: "blue",
+				dash: "draw",
+				fill: "none",
+				labelColor: "black",
+				size: "m",
+				arrowheadStart: "none",
+				arrowheadEnd: "arrow",
+				font: "draw",
+				start: { x: 0, y: 0 },
+				end: { x: 160, y: 0 },
+				labelPosition: 0.5,
+				scale: 1,
+				elbowMidPoint: 0.5,
+				richText: { type: "doc", content: [] },
+			},
+		});
+		bindingsToCreate.push(
+			{
+				fromId: arrowId,
+				toId: pair.fromId,
+				type: "arrow",
+				props: {
+					terminal: "start",
+					normalizedAnchor: { x: 0.5, y: 0.5 },
+					isExact: false,
+					isPrecise: false,
+					snap: "none",
+				},
+			},
+			{
+				fromId: arrowId,
+				toId: pair.toId,
+				type: "arrow",
+				props: {
+					terminal: "end",
+					normalizedAnchor: { x: 0.5, y: 0.5 },
+					isExact: false,
+					isPrecise: false,
+					snap: "none",
+				},
+			},
+		);
+	}
+
+	if (arrowsToCreate.length > 0) editor.createShapes(arrowsToCreate);
+	if (bindingsToCreate.length > 0) editor.createBindings(bindingsToCreate);
+}
 
 export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const editorRef = useRef<Editor | null>(null);
@@ -65,6 +259,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const lastAppliedShapesSignatureRef = useRef<string | null>(null);
 	const shapesRef = useRef<TLShapePartial[]>([]);
 	const shapesSignatureRef = useRef("");
+	const projectedPositionRef = useRef(new Map<string, { x: number; y: number }>());
 
 	const {
 		characters,
@@ -78,6 +273,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		awaitingConfirm,
 		recoverySummary,
 		currentRunId,
+		blockingClips,
 	} = useEditorStore(
 		useShallow((s) => ({
 			characters: s.characters,
@@ -91,6 +287,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			awaitingConfirm: s.awaitingConfirm,
 			recoverySummary: s.recoverySummary,
 			currentRunId: s.currentRunId,
+			blockingClips: s.blockingClips,
 		})),
 	);
 
@@ -108,7 +305,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		title: string;
 	} | null>(null);
 
-	const rawVideoUrl = projectVideoUrl || project?.video_url;
+	const rawVideoUrl = projectVideoUrl;
 	const finalVideoUrl = rawVideoUrl ? getStaticUrl(rawVideoUrl) : null;
 	const story = projectStory ?? project?.story ?? null;
 	const summary = projectSummary ?? project?.summary ?? null;
@@ -159,6 +356,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		awaitingConfirm,
 		currentRunId,
 		currentStage,
+		blockingClips,
 	});
 
 	const shapesSignature = useMemo(() => JSON.stringify(layout), [layout]);
@@ -302,17 +500,25 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			editor.deleteShapes(staleShapeIds);
 		}
 
-		// Create initial shapes (parents first, then children with parentId)
 		const currentShapes = shapesRef.current;
 		const currentSignature = shapesSignatureRef.current;
+		const resolvedShapes = resolveShapeLayout(
+			currentShapes,
+			editor.getCurrentPageShapes(),
+			projectedPositionRef.current,
+		);
 
-		if (currentShapes.length > 0) {
-			const parents = currentShapes.filter((s) => !s.parentId);
-			const children = currentShapes.filter((s) => s.parentId);
+		if (resolvedShapes.length > 0) {
 			editor.run(() => {
-				if (parents.length > 0) editor.createShapes(parents);
-				if (children.length > 0) editor.createShapes(children);
+				editor.createShapes(resolvedShapes);
+				syncWorkflowArrows(editor, resolvedShapes);
 			});
+			projectedPositionRef.current = new Map(
+				resolvedShapes.map((shape) => [
+					shape.id,
+					{ x: shape.x ?? 0, y: shape.y ?? 0 },
+				]),
+			);
 			lastAppliedShapesSignatureRef.current = currentSignature;
 			setTimeout(() => {
 				editor.zoomToFit({ animation: { duration: 300 } });
@@ -324,7 +530,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		setIsInitialized(true);
 	}, []);
 
-	// Sync shapes when layout changes — preserve user-dragged positions
+	// Sync projected cards when backend data changes; manual card positions stay user-owned.
 	useEffect(() => {
 		const editor = editorRef.current;
 		if (!editor || !isInitialized) return;
@@ -334,78 +540,46 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		if (desiredShapes.length === 0) return;
 
 		const existingShapes = editor.getCurrentPageShapes();
-		const existingMap = new Map(existingShapes.map((s) => [s.id, s]));
 		const desiredIds = new Set(desiredShapes.map((s) => s.id));
+		const resolvedShapes = resolveShapeLayout(
+			desiredShapes,
+			existingShapes,
+			projectedPositionRef.current,
+		);
+		const existingMap = new Map(existingShapes.map((s) => [s.id, s]));
 
 		editor.run(() => {
-			// Delete shapes that are no longer in the layout
-			const toDelete = existingShapes.filter(
-				(s) => !desiredIds.has(s.id) && !STALE_SHAPE_TYPES.has(s.type),
-			);
+			const toDelete = existingShapes.filter((s) => {
+				if (s.type === "arrow" && s.meta?.[WORKFLOW_ARROW_META] === true) {
+					return false;
+				}
+				return STALE_SHAPE_TYPES.has(s.type) || !desiredIds.has(s.id);
+			});
 			if (toDelete.length > 0) {
 				editor.deleteShapes(toDelete.map((s) => s.id));
 			}
 
-			// Separate parents (no parentId) from children (have parentId)
-			const parents: TLShapePartial[] = [];
-			const children: TLShapePartial[] = [];
-			for (const desired of desiredShapes) {
-				if (desired.parentId) {
-					children.push(desired);
+			const toCreate: TLShapePartial[] = [];
+			const toUpdate: TLShapePartial[] = [];
+			for (const desired of resolvedShapes) {
+				if (!existingMap.has(desired.id)) {
+					toCreate.push(desired);
 				} else {
-					parents.push(desired);
+					toUpdate.push(desired);
 				}
 			}
 
-			// Create/update parents first, then children (parentId requires parent to exist)
-			const parentsToCreate: TLShapePartial[] = [];
-			const parentsToUpdate: TLShapePartial[] = [];
-
-			for (const desired of parents) {
-				const existing = existingMap.get(desired.id);
-				if (!existing) {
-					parentsToCreate.push(desired);
-				} else {
-					parentsToUpdate.push({
-						...desired,
-						x: existing.x,
-						y: existing.y,
-					});
-				}
-			}
-
-			if (parentsToCreate.length > 0) {
-				editor.createShapes(parentsToCreate);
-			}
-			if (parentsToUpdate.length > 0) {
-				editor.updateShapes(parentsToUpdate);
-			}
-
-			// Now create/update children
-			const childrenToCreate: TLShapePartial[] = [];
-			const childrenToUpdate: TLShapePartial[] = [];
-
-			for (const desired of children) {
-				const existing = existingMap.get(desired.id);
-				if (!existing) {
-					childrenToCreate.push(desired);
-				} else {
-					// Preserve user-dragged position for children too
-					childrenToUpdate.push({
-						...desired,
-						x: existing.x,
-						y: existing.y,
-					});
-				}
-			}
-
-			if (childrenToCreate.length > 0) {
-				editor.createShapes(childrenToCreate);
-			}
-			if (childrenToUpdate.length > 0) {
-				editor.updateShapes(childrenToUpdate);
-			}
+			if (toCreate.length > 0) editor.createShapes(toCreate);
+			if (toUpdate.length > 0) editor.updateShapes(toUpdate);
+			syncWorkflowArrows(editor, resolvedShapes);
 		});
+
+		projectedPositionRef.current = new Map(
+			resolvedShapes.map((shape) => [
+				shape.id,
+				{ x: shape.x ?? 0, y: shape.y ?? 0 },
+			]),
+		);
 
 		// If this is the first time we're adding shapes, zoom to fit
 		if (existingShapes.length === 0 && desiredShapes.length > 0) {
@@ -424,7 +598,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 					shapeUtils={customShapeUtils}
 					components={components}
 					onMount={handleMount}
-					persistenceKey="openoii-canvas-v10"
+					persistenceKey="openoii-canvas-v12"
 				>
 					<CanvasToolbar />
 					<ShapeContextMenu />

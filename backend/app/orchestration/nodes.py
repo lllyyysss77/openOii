@@ -79,7 +79,18 @@ async def _run_sub_stage(
         return {
             "current_stage": stage,
             "stage_history": [stage],
+            "artifact_lineage": [_stage_key(stage), _stage_key("compose_merge")],
+            "video_generation_skipped": True,
+            "route_stage": "__end__",
+        }
+
+    if stage == "compose_merge" and state.get("video_generation_skipped"):
+        return {
+            "current_stage": stage,
+            "stage_history": [stage],
             "artifact_lineage": [_stage_key(stage)],
+            "video_generation_skipped": True,
+            "route_stage": "__end__",
         }
 
     if _should_skip_stage(state, stage):
@@ -436,6 +447,18 @@ def route_after_character_images_approval(state: Phase2State) -> str:
 
 def route_after_shot_images_approval(state: Phase2State) -> str:
     return _route_after_approval(state, default_next="compose_videos")
+
+
+def route_after_compose_videos(state: Phase2State) -> str:
+    if state.get("video_generation_skipped") or state.get("route_stage") == "__end__":
+        return "__end__"
+    return "compose_merge"
+
+
+def route_after_compose_merge(state: Phase2State) -> str:
+    if state.get("video_generation_skipped") or state.get("route_stage") == "__end__":
+        return "__end__"
+    return "compose_approval"
 
 
 def route_after_compose_approval(state: Phase2State) -> str:

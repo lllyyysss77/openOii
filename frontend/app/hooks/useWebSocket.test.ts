@@ -220,6 +220,93 @@ describe("useProjectWebSocket", () => {
     vi.unstubAllGlobals();
   });
 
+  it("replaces transient batch progress messages while run is active", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setMessages([
+      {
+        id: "old-progress",
+        agent: "compose",
+        role: "assistant",
+        content: "正在生成视频 1/6...",
+        isLoading: false,
+      },
+      {
+        id: "stable-result",
+        agent: "compose",
+        role: "assistant",
+        content: "漫剧制作完成！6 个分镜已拼接为完整视频。",
+      },
+    ]);
+
+    applyWsEvent(
+      {
+        type: "run_message",
+        data: {
+          agent: "compose",
+          role: "assistant",
+          content: "正在生成视频 2/6...",
+          isLoading: true,
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    const messages = useEditorStore.getState().messages;
+    expect(messages.map((message) => message.content)).toEqual([
+      "漫剧制作完成！6 个分镜已拼接为完整视频。",
+      "正在生成视频 2/6...",
+    ]);
+  });
+
+  it("removes transient batch progress messages after run completes", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setMessages([
+      {
+        id: "start-videos",
+        agent: "compose",
+        role: "assistant",
+        content: "开始生成 6 个分镜生成视频（图生视频）...",
+        isLoading: false,
+      },
+      {
+        id: "progress-video",
+        agent: "compose",
+        role: "assistant",
+        content: "正在生成视频 6/6...",
+        isLoading: false,
+      },
+      {
+        id: "merge-videos",
+        agent: "compose",
+        role: "assistant",
+        content: "开始拼接 6 个分镜视频...",
+        isLoading: false,
+      },
+      {
+        id: "result",
+        agent: "compose",
+        role: "assistant",
+        content: "漫剧制作完成！6 个分镜已拼接为完整视频。",
+      },
+    ]);
+
+    applyWsEvent(
+      {
+        type: "run_completed",
+        data: { current_stage: "compose" } as never,
+      },
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState().messages.map((message) => message.content)).toEqual([
+      "漫剧制作完成！6 个分镜已拼接为完整视频。",
+    ]);
+  });
+
   it("clears loading messages when next run message arrives", () => {
     const initialStore = useEditorStore.getState();
 

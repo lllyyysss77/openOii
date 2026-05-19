@@ -35,8 +35,16 @@ def build_phase2_graph() -> StateGraph:
     graph.add_edge("plan_shots", "shots_approval")
     graph.add_edge("render_characters", "character_images_approval")
     graph.add_edge("render_shots", "shot_images_approval")
-    graph.add_edge("compose_videos", "compose_merge")
-    graph.add_edge("compose_merge", "compose_approval")
+    graph.add_conditional_edges(
+        "compose_videos",
+        nodes.route_after_compose_videos,
+        {"compose_merge": "compose_merge", END: END},
+    )
+    graph.add_conditional_edges(
+        "compose_merge",
+        nodes.route_after_compose_merge,
+        {"compose_approval": "compose_approval", END: END},
+    )
 
     # ---- Conditional edges after approvals (may route to review) ----
     graph.add_conditional_edges(

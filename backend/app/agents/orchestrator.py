@@ -652,6 +652,7 @@ class GenerationOrchestrator:
             "approval_feedback": "",
             "route_stage": start_stage,
             "route_mode": "full",
+            "video_generation_skipped": False,
         }
 
     async def _invoke_phase2_graph(

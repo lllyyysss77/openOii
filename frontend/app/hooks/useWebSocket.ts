@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useEditorStore, type RunMode } from "~/stores/editorStore";
 import type {
+	AgentMessage,
 	Character,
 	ProjectUpdatedPayload,
 	RunAwaitingConfirmEventData,
@@ -19,6 +20,12 @@ import { getWsBase } from "~/utils/runtimeBase";
 const WS_BASE = getWsBase();
 const RECONNECT_DELAY = 3000;
 const MAX_RECONNECT_ATTEMPTS = 5;
+
+const TRANSIENT_MESSAGE_PATTERNS = [
+	/^正在生成视频\s+\d+\/\d+/,
+	/^开始生成\s+\d+\s*个分镜生成视频/,
+	/^开始拼接\s+\d+\s*个分镜视频/,
+];
 
 let messageIdCounter = 0;
 function generateMessageId(): string {
@@ -215,13 +222,21 @@ function clearLoadingStates(
 	}
 }
 
+function isTransientProgressMessage(msg: AgentMessage): boolean {
+	const content = msg.content.trim();
+	return (
+		Boolean(msg.isLoading) ||
+		TRANSIENT_MESSAGE_PATTERNS.some((pattern) => pattern.test(content))
+	);
+}
+
 function cleanupStaleMessages(
 	store: ReturnType<typeof useEditorStore.getState>,
-	completedAgent: string,
+	completedAgent?: string,
 ): void {
 	const currentMessages = useEditorStore.getState().messages;
 	const cleaned = currentMessages.filter((msg) => {
-		if (msg.agent !== completedAgent) return true;
+		if (completedAgent && msg.agent !== completedAgent) return true;
 		// 移除确认/继续执行的临时消息
 		if (
 			msg.role === "info" &&
@@ -230,8 +245,8 @@ function cleanupStaleMessages(
 			return false;
 		// 移除空消息
 		if (!msg.content?.trim() && !msg.summary) return false;
-		// 移除加载中的进度消息（临时消息）
-		if (msg.isLoading) return false;
+		// 移除加载中的进度消息（临时消息）和批处理流水账
+		if (isTransientProgressMessage(msg)) return false;
 		return true;
 	});
 	if (cleaned.length !== currentMessages.length) {
@@ -321,7 +336,7 @@ export function applyWsEvent(
 			) {
 				store.setProgress(msgProgress);
 			}
-			store.addMessage({
+			const message: AgentMessage = {
 				id: generateMessageId(),
 				agent,
 				role: event.data.role as string,
@@ -330,7 +345,11 @@ export function applyWsEvent(
 				timestamp: new Date().toISOString(),
 				progress: msgProgress,
 				isLoading: event.data.isLoading as boolean | undefined,
-			});
+			};
+			if (isTransientProgressMessage(message)) {
+				cleanupStaleMessages(store, agent);
+			}
+			store.addMessage(message);
 			break;
 		}
 
@@ -381,9 +400,7 @@ export function applyWsEvent(
 		case "run_completed": {
 			clearLoadingStates(store);
 			const d = event.data as unknown as RunCompletedEventData;
-			const completedAgent = d.current_agent || "";
-			if (completedAgent) cleanupStaleMessages(store, completedAgent);
-			cleanupStaleMessages(store, "system");
+			cleanupStaleMessages(store);
 			store.resetRunState();
 			store.setProgress(1);
 			const stage = resolveEventStage(event.data);
@@ -408,6 +425,7 @@ export function applyWsEvent(
 
 		case "run_failed": {
 			clearLoadingStates(store);
+			cleanupStaleMessages(store);
 			const d = event.data as unknown as RunFailedEventData;
 			store.resetRunState();
 			store.addMessage({

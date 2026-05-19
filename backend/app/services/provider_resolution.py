@@ -21,9 +21,9 @@ class ProjectProviderOverrides(Protocol):
 
 TEXT_PROVIDER_KEYS = ("anthropic", "openai")
 IMAGE_PROVIDER_KEYS = ("openai",)
-VIDEO_PROVIDER_KEYS = ("openai", "doubao")
+VIDEO_PROVIDER_KEYS = ("openai", "doubao", "fake")
 TEXT_PROBE_TTL_S = 300.0
-TEXT_PROBE_TIMEOUT_S = 8.0
+TEXT_PROBE_TIMEOUT_S = 60.0
 TEXT_PROBE_MAX_RETRIES = 1
 
 
@@ -261,6 +261,7 @@ def resolve_project_provider_settings(
         credential_ok={
             "openai": bool(settings.video_api_key),
             "doubao": bool(settings.doubao_api_key),
+            "fake": True,
         },
         modality_label="视频",
     )

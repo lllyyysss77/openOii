@@ -60,11 +60,13 @@ describe("groupConfigs", () => {
 			makeConfig("DOUBAO_VIDEO_MODEL"),
 			makeConfig("ENABLE_IMAGE_TO_VIDEO"),
 			makeConfig("VIDEO_IMAGE_MODE"),
+			makeConfig("FAKE_VIDEO_FIXTURE_URL"),
+			makeConfig("FAKE_VIDEO_FIXTURE_PATH"),
 		];
 		const sections = groupConfigs(items);
 		const videoSection = sections.find((s) => s.key === "video");
 		expect(videoSection).toBeDefined();
-		expect(videoSection!.items).toHaveLength(6);
+		expect(videoSection!.items).toHaveLength(8);
 	});
 
 	it("其他配置归类到 basic 组", () => {

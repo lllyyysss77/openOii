@@ -580,6 +580,22 @@ async def test_test_video_connection_reports_outer_exception(monkeypatch, test_s
 
 
 @pytest.mark.asyncio
+async def test_video_connection_allows_fake_fixture_override(async_client):
+    res = await async_client.post(
+        "/api/v1/config/test-connection",
+        json={
+            "service": "video",
+            "config_overrides": {
+                "video_provider": "fake",
+                "fake_video_fixture_url": "/static/videos/dev_clip.mp4",
+            },
+        },
+    )
+
+    assert res.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_test_video_connection_success_through_route(monkeypatch, test_settings):
     test_settings.video_provider = "openai"
 

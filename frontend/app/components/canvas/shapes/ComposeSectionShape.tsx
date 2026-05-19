@@ -90,6 +90,7 @@ export class ComposeSectionShapeUtil extends ShapeUtil<ComposeSectionShape> {
 			placeholder,
 			placeholderText,
 			statusLabel,
+			sectionState,
 		} = shape.props;
 		const ref = useDomSize(shape, this.editor ?? null);
 
@@ -106,6 +107,11 @@ export class ComposeSectionShapeUtil extends ShapeUtil<ComposeSectionShape> {
 						placeholderText={placeholderText}
 						placeholderIcon={VIDEO_PLACEHOLDER_ICON}
 					>
+						{sectionState === "blocked" && placeholderText ? (
+							<p className="mb-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-content">
+								{placeholderText}
+							</p>
+						) : null}
 						{videoUrl ? (
 							<div className="space-y-3">
 								<video

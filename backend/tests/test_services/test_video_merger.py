@@ -14,9 +14,16 @@ def test_merge_videos_requires_urls(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_merge_videos_returns_single_url(tmp_path):
+async def test_merge_videos_normalizes_single_url(monkeypatch, tmp_path):
     svc = VideoMergerService(output_dir=tmp_path)
-    assert await svc.merge_videos(["https://cdn.example.com/a.mp4"]) == "https://cdn.example.com/a.mp4"
+
+    async def fake_download(url, dest):
+        dest.write_bytes(b"data")
+
+    monkeypatch.setattr(svc, "download_video", fake_download)
+
+    assert await svc.merge_videos(["https://cdn.example.com/a.mp4"], output_filename="single") == "/static/videos/single.mp4"
+    assert (tmp_path / "single.mp4").read_bytes() == b"data"
 
 
 @pytest.mark.asyncio
@@ -148,6 +155,20 @@ async def test_close_when_already_closed(tmp_path):
     await svc._get_client()
     await svc.close()
     await svc.close()  # should not raise
+
+
+@pytest.mark.asyncio
+async def test_download_video_copies_local_static_file(monkeypatch, tmp_path):
+    svc = VideoMergerService(output_dir=tmp_path)
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"local-video")
+    dest = tmp_path / "dest.mp4"
+
+    monkeypatch.setattr("app.services.video_merger.get_local_path", lambda url: source)
+
+    await svc.download_video("/static/videos/source.mp4", dest)
+
+    assert dest.read_bytes() == b"local-video"
 
 
 @pytest.mark.asyncio

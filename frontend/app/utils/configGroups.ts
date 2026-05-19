@@ -38,6 +38,7 @@ export function groupConfigs(configs: ConfigItem[]): ConfigSection[] {
 		else if (
 			key.startsWith("video_") ||
 			key.startsWith("doubao_") ||
+			key.startsWith("fake_video_") ||
 			key === "enable_image_to_video"
 		) {
 			groups.video.push(config);

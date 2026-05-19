@@ -286,6 +286,24 @@ async def test_update_project(async_client, test_session, test_settings, method)
 
 
 @pytest.mark.asyncio
+async def test_create_project_accepts_fake_video_provider(async_client, monkeypatch):
+    _stub_async_provider_resolution(monkeypatch)
+
+    res = await async_client.post(
+        "/api/v1/projects",
+        json={
+            "title": "Fake Video Project",
+            "video_provider_override": "fake",
+        },
+    )
+
+    assert res.status_code == 201
+    data = res.json()
+    assert data["provider_settings"]["video"]["selected_key"] == "fake"
+    assert data["provider_settings"]["video"]["valid"] is True
+
+
+@pytest.mark.asyncio
 async def test_create_project_rejects_unknown_provider_keys(async_client):
     res = await async_client.post(
         "/api/v1/projects",

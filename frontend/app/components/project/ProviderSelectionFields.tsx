@@ -29,6 +29,7 @@ export const VIDEO_PROVIDER_OPTIONS = [
   "inherit-default",
   "openai",
   "doubao",
+  "fake",
 ] as const;
 
 const PROVIDER_FIELDS: ProviderFieldConfig[] = [
@@ -69,6 +70,8 @@ function getProviderLabel(key: string): string {
       return "OpenAI";
     case "doubao":
       return "Doubao";
+    case "fake":
+      return "Fake（本地测试）";
     default:
       return key;
   }

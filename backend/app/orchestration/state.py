@@ -84,6 +84,7 @@ class Phase2State(TypedDict, total=False):
     review_requested: bool
     route_stage: str
     route_mode: str
+    video_generation_skipped: bool
 
 
 @dataclass(slots=True)

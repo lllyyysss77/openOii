@@ -33,6 +33,13 @@ describe("MessageList", () => {
     expect(screen.getByText(baseMsg.content)).toBeInTheDocument();
   });
 
+  it("marks message content as copyable selectable text", () => {
+    const { container } = render(<MessageList messages={[baseMsg]} />);
+    const content = container.querySelector('[data-copyable="true"]');
+    expect(content).toHaveClass("select-text");
+    expect(content).toHaveClass("break-words");
+  });
+
   it("renders separator role as divider", () => {
     const sep = { ...baseMsg, id: "sep1", role: "separator" as const, content: "---" };
     const { container } = render(<MessageList messages={[sep]} />);

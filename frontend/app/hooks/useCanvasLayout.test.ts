@@ -75,30 +75,37 @@ function makeShot(id: number, order: number): Shot {
 	} as unknown as Shot;
 }
 
+function shapeProps(result: { current: { shapes: { props?: unknown }[] } }, type: string) {
+	return result.current.shapes.find((shape) => shape.type === type)?.props as
+		| Record<string, unknown>
+		| undefined;
+}
+
 describe("useCanvasLayout", () => {
-	it("returns a plan-section shape when plan is visible", () => {
+	it("returns an independently movable plan card when plan section is visible", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
 				visibleSections: ["plan"] as SectionKey[],
 			}),
 		);
-		const types = result.current.shapes.map((s) => s.type);
-		expect(types).toContain("plan-section");
+
+		expect(result.current.shapes).toHaveLength(1);
+		expect(result.current.shapes[0]?.type).toBe("plan-section");
 	});
 
-	it("does not return plan-section when plan is not visible", () => {
+	it("returns no cards when no sections are visible", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
 				visibleSections: [] as SectionKey[],
 			}),
 		);
-		const types = result.current.shapes.map((s) => s.type);
-		expect(types).not.toContain("plan-section");
+
+		expect(result.current.shapes).toHaveLength(0);
 	});
 
-	it("creates a character-section with characters prop", () => {
+	it("passes characters through the character section props", () => {
 		const characters = [makeCharacter(1, "Alice"), makeCharacter(2, "Bob")];
 		const { result } = renderHook(() =>
 			useCanvasLayout({
@@ -107,16 +114,11 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan", "render"] as SectionKey[],
 			}),
 		);
-		const charSection = result.current.shapes.find(
-			(s) => s.type === "character-section",
-		);
-		expect(charSection).toBeDefined();
-		expect(
-			(charSection!.props as Record<string, unknown>).characters,
-		).toHaveLength(2);
+
+		expect(shapeProps(result, "character-section")?.characters).toHaveLength(2);
 	});
 
-	it("creates a storyboard-section with shots prop", () => {
+	it("passes shots through the storyboard section props", () => {
 		const shots = [makeShot(10, 1), makeShot(20, 2)];
 		const { result } = renderHook(() =>
 			useCanvasLayout({
@@ -125,16 +127,11 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan", "render"] as SectionKey[],
 			}),
 		);
-		const shotSection = result.current.shapes.find(
-			(s) => s.type === "storyboard-section",
-		);
-		expect(shotSection).toBeDefined();
-		expect((shotSection!.props as Record<string, unknown>).shots).toHaveLength(
-			2,
-		);
+
+		expect(shapeProps(result, "storyboard-section")?.shots).toHaveLength(2);
 	});
 
-	it("creates a compose-section shape when compose is visible", () => {
+	it("includes compose card when compose is visible", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -142,11 +139,13 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan", "render", "compose"] as SectionKey[],
 			}),
 		);
-		const types = result.current.shapes.map((s) => s.type);
-		expect(types).toContain("compose-section");
+
+		expect(result.current.shapes.map((shape) => shape.type)).toContain(
+			"compose-section",
+		);
 	});
 
-	it("does not create compose-section when compose is not visible", () => {
+	it("does not include compose card when compose is not visible", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -154,11 +153,30 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan"] as SectionKey[],
 			}),
 		);
-		const types = result.current.shapes.map((s) => s.type);
-		expect(types).not.toContain("compose-section");
+
+		expect(result.current.shapes.map((shape) => shape.type)).not.toContain(
+			"compose-section",
+		);
 	});
 
-	it("assigns stable shape IDs to section shapes", () => {
+	it("marks compose card blocked when blocking clips exist", () => {
+		const { result } = renderHook(() =>
+			useCanvasLayout({
+				...defaultProps,
+				videoUrl: "http://example.com/stale.mp4",
+				visibleSections: ["compose"] as SectionKey[],
+				blockingClips: [
+					{ shot_id: 3, order: 2, status: "missing", reason: "视频缺失" },
+				],
+			}),
+		);
+		const props = shapeProps(result, "compose-section");
+
+		expect(props?.sectionState).toBe("blocked");
+		expect(props?.placeholderText).toBe("镜头 2: 视频缺失");
+	});
+
+	it("assigns stable card IDs", () => {
 		const characters = [makeCharacter(42, "Test")];
 		const { result } = renderHook(() =>
 			useCanvasLayout({
@@ -167,11 +185,8 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan", "render"] as SectionKey[],
 			}),
 		);
-		const charSection = result.current.shapes.find(
-			(s) => s.type === "character-section",
-		);
-		expect(charSection).toBeDefined();
-		// Shape ID should be stable across re-renders
+		const ids = result.current.shapes.map((shape) => shape.id);
+
 		const { result: result2 } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -179,13 +194,11 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan", "render"] as SectionKey[],
 			}),
 		);
-		const charSection2 = result2.current.shapes.find(
-			(s) => s.type === "character-section",
-		);
-		expect(charSection2?.id).toBe(charSection?.id);
+
+		expect(result2.current.shapes.map((shape) => shape.id)).toEqual(ids);
 	});
 
-	it("marks plan section state as generating when generating", () => {
+	it("marks plan card state as generating when generating", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -195,16 +208,11 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan"] as SectionKey[],
 			}),
 		);
-		const planShape = result.current.shapes.find(
-			(s) => s.type === "plan-section",
-		);
-		expect(planShape?.props).toBeDefined();
-		expect((planShape!.props as Record<string, unknown>).sectionState).toBe(
-			"generating",
-		);
+
+		expect(shapeProps(result, "plan-section")?.sectionState).toBe("generating");
 	});
 
-	it("marks plan section state as complete when story exists", () => {
+	it("marks plan card state as complete when story exists", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -213,12 +221,7 @@ describe("useCanvasLayout", () => {
 				visibleSections: ["plan"] as SectionKey[],
 			}),
 		);
-		const planShape = result.current.shapes.find(
-			(s) => s.type === "plan-section",
-		);
-		expect(planShape?.props).toBeDefined();
-		expect((planShape!.props as Record<string, unknown>).sectionState).toBe(
-			"complete",
-		);
+
+		expect(shapeProps(result, "plan-section")?.sectionState).toBe("complete");
 	});
 });

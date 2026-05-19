@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 TextProviderKey = Literal["anthropic", "openai"]
 ImageProviderKey = Literal["openai"]
-VideoProviderKey = Literal["openai", "doubao"]
+VideoProviderKey = Literal["openai", "doubao", "fake"]
 
 
 class ProjectProviderEntry(BaseModel):

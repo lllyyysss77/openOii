@@ -41,6 +41,9 @@ describe('ProviderSelectionFields', () => {
     expect(
       within(videoFieldset as HTMLElement).getByRole('radio', { name: '继承默认（当前：OpenAI）' })
     ).toBeChecked();
+    expect(
+      within(videoFieldset as HTMLElement).getByRole('radio', { name: 'Fake（本地测试）' })
+    ).toBeInTheDocument();
   });
 
   it('uses custom default keys and writes null when switching back to inherit', async () => {

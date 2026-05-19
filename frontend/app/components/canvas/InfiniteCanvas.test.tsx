@@ -10,13 +10,18 @@ interface LayoutMockArgs {
 	story?: string | null;
 	summary?: string | null;
 	visibleSections?: SectionKey[];
+	videoUrl?: string | null;
+	blockingClips?: unknown[] | null;
 }
 
 interface MockShape {
 	id: string;
 	type?: string;
+	x?: number;
+	y?: number;
 	parentId?: string;
 	props?: Record<string, unknown>;
+	meta?: Record<string, unknown>;
 }
 
 interface MockEditor {
@@ -26,7 +31,7 @@ interface MockEditor {
 	deleteShapes: ReturnType<typeof vi.fn<(ids: string[]) => void>>;
 	getCurrentPageShapes: ReturnType<typeof vi.fn<() => MockShape[]>>;
 	getBindingsFromShape: ReturnType<typeof vi.fn<() => unknown[]>>;
-	createBindings: ReturnType<typeof vi.fn>;
+	createBindings: ReturnType<typeof vi.fn<(bindings: unknown[]) => void>>;
 	deleteBindings: ReturnType<typeof vi.fn>;
 	getShape: ReturnType<typeof vi.fn<(id: string) => MockShape | null>>;
 	getShapeGeometry: ReturnType<
@@ -58,6 +63,7 @@ interface MockEditorStoreState {
 	currentRunId: number | null;
 	isGenerating: boolean;
 	awaitingConfirm: boolean;
+	blockingClips: unknown[] | null;
 }
 
 const useCanvasLayoutMock = vi.hoisted(() =>
@@ -69,8 +75,8 @@ const useCanvasLayoutMock = vi.hoisted(() =>
 				x: 100,
 				y: 100,
 				props: {
-					w: 920,
-					h: 200,
+					w: 420,
+					h: 260,
 					projectId: 1,
 					story: "",
 					summary: "",
@@ -87,37 +93,10 @@ const useCanvasLayoutMock = vi.hoisted(() =>
 						{
 							id: "shape:character-section",
 							type: "character-section",
-							x: 100,
-							y: 324,
-							props: {
-								w: 920,
-								h: 400,
-								characters: [],
-								sectionState: "draft",
-								placeholder: false,
-								statusLabel: "待生成",
-								placeholderText: "",
-								sectionTitle: "角色",
-							},
+							x: 600,
+							y: 100,
+							props: { w: 420, h: 360 },
 						},
-						{},
-						{
-							id: "shape:storyboard-section",
-							type: "storyboard-section",
-							x: 100,
-							y: 748,
-							props: {
-								w: 920,
-								h: 400,
-								shots: [],
-								sectionTitle: "分镜画面",
-								sectionState: "draft",
-								placeholder: false,
-								statusLabel: "待生成",
-								placeholderText: "",
-							},
-						},
-						{},
 					]
 				: []),
 		],
@@ -144,7 +123,7 @@ const mockEditor = vi.hoisted(() => {
 		}),
 		getCurrentPageShapes: vi.fn(() => shapes.map((shape) => ({ ...shape }))),
 		getBindingsFromShape: vi.fn(() => []),
-		createBindings: vi.fn(),
+		createBindings: vi.fn((_bindings: unknown[]) => undefined),
 		deleteBindings: vi.fn(),
 		getShape: vi.fn((id: string) => shapes.find((s) => s.id === id) ?? null),
 		getShapeGeometry: vi.fn(() => ({ bounds: { x: 0, y: 0, w: 100, h: 100 } })),
@@ -244,6 +223,8 @@ vi.mock("~/hooks/useCanvasLayout", async (importOriginal) => {
 
 beforeEach(() => {
 	mockEditor.reset();
+	mockStoreState.projectVideoUrl = null;
+	mockStoreState.blockingClips = null;
 	vi.clearAllMocks();
 });
 
@@ -311,6 +292,7 @@ const mockStoreState: MockEditorStoreState = {
 	currentRunId: 77,
 	isGenerating: false,
 	awaitingConfirm: false,
+	blockingClips: null,
 };
 
 vi.mock("~/stores/editorStore", () => ({
@@ -343,7 +325,7 @@ vi.mock("~/services/api", () => ({
 }));
 
 describe("InfiniteCanvas", () => {
-	it("only mounts sections that are revealed for the current stage", async () => {
+	it("mounts independent section cards that are revealed for the current stage", async () => {
 		render(<InfiniteCanvas projectId={1} />);
 
 		await waitFor(() => {
@@ -359,6 +341,9 @@ describe("InfiniteCanvas", () => {
 				expect.objectContaining({
 					type: "plan-section",
 				}),
+				expect.objectContaining({
+					type: "character-section",
+				}),
 			]),
 		);
 	});
@@ -372,6 +357,57 @@ describe("InfiniteCanvas", () => {
 
 		expect(useCanvasLayoutMock.mock.calls[0]?.[0].story).toBe("Store 故事");
 		expect(useCanvasLayoutMock.mock.calls[0]?.[0].summary).toBe("Store 摘要");
+	});
+
+	it("uses explicit store final video state and passes blocking clips", async () => {
+		mockStoreState.projectVideoUrl = null;
+		mockStoreState.blockingClips = [
+			{ shot_id: 1, order: 1, status: "missing", reason: "缺少视频" },
+		];
+
+		render(<InfiniteCanvas projectId={1} />);
+
+		await waitFor(() => {
+			expect(useCanvasLayoutMock).toHaveBeenCalled();
+		});
+
+		expect(useCanvasLayoutMock.mock.calls[0]?.[0].videoUrl).toBeNull();
+		expect(useCanvasLayoutMock.mock.calls[0]?.[0].blockingClips).toEqual(
+			mockStoreState.blockingClips,
+		);
+	});
+
+	it("creates bound workflow arrows between adjacent cards", async () => {
+		render(<InfiniteCanvas projectId={1} />);
+
+		await waitFor(() => {
+			expect(mockEditor.createBindings).toHaveBeenCalled();
+		});
+
+		expect(mockEditor.createShapes).toHaveBeenCalledWith(
+			expect.arrayContaining([
+				expect.objectContaining({
+					type: "arrow",
+					meta: { "openoii-workflow-arrow": true },
+				}),
+			]),
+		);
+		expect(mockEditor.createBindings).toHaveBeenCalledWith(
+			expect.arrayContaining([
+				expect.objectContaining({
+					fromId: expect.stringContaining("workflow-plan-section-to-character-section"),
+					toId: "shape:plan-section",
+					type: "arrow",
+					props: expect.objectContaining({ terminal: "start" }),
+				}),
+				expect.objectContaining({
+					fromId: expect.stringContaining("workflow-plan-section-to-character-section"),
+					toId: "shape:character-section",
+					type: "arrow",
+					props: expect.objectContaining({ terminal: "end" }),
+				}),
+			]),
+		);
 	});
 
 	it("does not rewrite the projected canvas when backend data is unchanged", async () => {

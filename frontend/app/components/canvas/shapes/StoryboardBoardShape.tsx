@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
 	HTMLContainer,
 	Rectangle2d,
@@ -25,6 +25,11 @@ const SECTION_TITLES: Record<StoryboardBoardSectionKey, string> = {
 	plan: "编剧规划",
 	render: "视觉渲染",
 	compose: "最终输出",
+};
+
+const SECTION_FLOW_COPY: Partial<Record<StoryboardBoardSectionKey, string>> = {
+	render: "角色与分镜接力",
+	compose: "镜头汇成成片",
 };
 
 const VIDEO_PLACEHOLDER_ICON = (
@@ -614,102 +619,138 @@ export class StoryboardBoardShapeUtil extends ShapeUtil<StoryboardBoardShape> {
 				style={{ width: w, pointerEvents: "all", overflow: "visible" }}
 			>
 				<div ref={ref} style={{ width: w }}>
-					<div
-						className="flex flex-col rounded-[1.6rem] bg-base-200/30 p-5"
-						style={{ gap: "var(--space-xl, 2rem)" }}
-					>
-						{sections.includes("plan") && (
-							<SectionShell
-								sectionKey="plan"
-								sectionTitle={SECTION_TITLES.plan}
-								statusLabel={statusLabels.plan ?? "待生成"}
-								placeholder={Boolean(placeholders.plan)}
-								placeholderText={
-									placeholderTexts.plan ??
-									getWorkspaceSectionPlaceholderText("plan")
-								}
-							>
-								<PlanSection
-									story={story}
-									summary={summary}
-									characters={typedCharacters}
-									shots={typedShots}
-								/>
-							</SectionShell>
-						)}
-
-						{sections.includes("render") && (
-							<SectionShell
-								sectionKey="render"
-								sectionTitle={SECTION_TITLES.render}
-								statusLabel={statusLabels.render ?? "待生成"}
-								placeholder={Boolean(placeholders.render)}
-								placeholderText={
-									placeholderTexts.render ??
-									getWorkspaceSectionPlaceholderText("render")
-								}
-							>
-								<div className="space-y-4">
-									<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-										{typedCharacters.map((character) => (
-											<CharacterCard key={character.id} character={character} />
-										))}
-									</div>
-									<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-										{typedShots.map((shot) => (
-											<ShotCard key={shot.id} shot={shot} />
-										))}
-									</div>
-								</div>
-							</SectionShell>
-						)}
-
-						{sections.includes("compose") && (
-							<SectionShell
-								sectionKey="compose"
-								sectionTitle={SECTION_TITLES.compose}
-								statusLabel={statusLabels.compose ?? "待生成"}
-								placeholder={!videoUrl && Boolean(placeholders.compose)}
-								placeholderText={
-									placeholderTexts.compose ??
-									getWorkspaceSectionPlaceholderText("compose")
-								}
-								placeholderIcon={VIDEO_PLACEHOLDER_ICON}
-							>
-								{videoUrl ? (
-									<div className="space-y-3">
-										<video
-											className="w-full rounded-xl bg-base-300"
-											src={videoUrl}
-											controls
-											onPointerDown={stopCanvasDrag}
-											aria-label={videoTitle}
+					<div className="rounded-[1.6rem] bg-base-200/30 p-5">
+						{sections.map((section, index) => {
+							const showFlowConnector = index > 0;
+							return (
+								<Fragment key={section}>
+									{showFlowConnector && (
+										<div
+											className="pointer-events-none flex h-16 items-center justify-center text-primary/70"
+											aria-hidden="true"
 										>
-											<track
-												kind="captions"
-												label="中文"
-												srcLang="zh"
-												default
-												src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${videoTitle || "最终视频"}`)}`}
-											/>
-										</video>
-										<div className="flex justify-end">
-											<a
-												href={
-													getStaticUrl(downloadUrl || videoUrl) ?? undefined
-												}
-												download
-												className="btn btn-sm btn-doodle gap-1 text-xs"
-												onPointerDown={stopCanvasDrag}
+											<svg
+												viewBox="0 0 920 64"
+												className="h-16 w-full overflow-visible"
+												preserveAspectRatio="none"
 											>
-												<SvgIcon name="download" size={12} />
-												下载
-											</a>
+												<path
+													d="M 458 4 C 356 18 564 44 462 60"
+													fill="none"
+													stroke="currentColor"
+													strokeWidth="4"
+													strokeLinecap="round"
+													strokeDasharray="10 10"
+												/>
+												<path
+													d="M 462 60 L 450 47 M 462 60 L 476 48"
+													fill="none"
+													stroke="currentColor"
+													strokeWidth="4"
+													strokeLinecap="round"
+												/>
+											</svg>
+											<span className="absolute rounded-full border-2 border-base-content/20 bg-base-100 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-base-content/60 shadow-comic-sm">
+												{SECTION_FLOW_COPY[section] ?? "流程推进"}
+											</span>
 										</div>
-									</div>
-								) : null}
-							</SectionShell>
-						)}
+									)}
+
+									{section === "plan" && (
+										<SectionShell
+											sectionKey="plan"
+											sectionTitle={SECTION_TITLES.plan}
+											statusLabel={statusLabels.plan ?? "待生成"}
+											placeholder={Boolean(placeholders.plan)}
+											placeholderText={
+												placeholderTexts.plan ??
+												getWorkspaceSectionPlaceholderText("plan")
+											}
+										>
+											<PlanSection
+												story={story}
+												summary={summary}
+												characters={typedCharacters}
+												shots={typedShots}
+											/>
+										</SectionShell>
+									)}
+
+									{section === "render" && (
+										<SectionShell
+											sectionKey="render"
+											sectionTitle={SECTION_TITLES.render}
+											statusLabel={statusLabels.render ?? "待生成"}
+											placeholder={Boolean(placeholders.render)}
+											placeholderText={
+												placeholderTexts.render ??
+												getWorkspaceSectionPlaceholderText("render")
+											}
+										>
+											<div className="space-y-6">
+												<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+													{typedCharacters.map((character) => (
+														<CharacterCard key={character.id} character={character} />
+													))}
+												</div>
+												<div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+													{typedShots.map((shot) => (
+														<ShotCard key={shot.id} shot={shot} />
+													))}
+												</div>
+											</div>
+										</SectionShell>
+									)}
+
+									{section === "compose" && (
+										<SectionShell
+											sectionKey="compose"
+											sectionTitle={SECTION_TITLES.compose}
+											statusLabel={statusLabels.compose ?? "待生成"}
+											placeholder={!videoUrl && Boolean(placeholders.compose)}
+											placeholderText={
+												placeholderTexts.compose ??
+												getWorkspaceSectionPlaceholderText("compose")
+											}
+											placeholderIcon={VIDEO_PLACEHOLDER_ICON}
+										>
+											{videoUrl ? (
+												<div className="space-y-3">
+													<video
+														className="w-full rounded-xl bg-base-300"
+														src={videoUrl}
+														controls
+														onPointerDown={stopCanvasDrag}
+														aria-label={videoTitle}
+													>
+														<track
+															kind="captions"
+															label="中文"
+															srcLang="zh"
+															default
+															src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${videoTitle || "最终视频"}`)}`}
+														/>
+													</video>
+													<div className="flex justify-end">
+														<a
+															href={
+																getStaticUrl(downloadUrl || videoUrl) ?? undefined
+															}
+															download
+															className="btn btn-sm btn-doodle gap-1 text-xs"
+															onPointerDown={stopCanvasDrag}
+														>
+															<SvgIcon name="download" size={12} />
+															下载
+														</a>
+													</div>
+												</div>
+											) : null}
+										</SectionShell>
+									)}
+								</Fragment>
+							);
+						})}
 
 						<div className="sr-only" aria-live="polite">
 							{sections

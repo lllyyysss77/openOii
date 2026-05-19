@@ -421,6 +421,16 @@ describe('ProjectPage live hydration', () => {
     expect(screen.queryByText('编辑 Provider')).not.toBeInTheDocument();
   });
 
+  it('clears final video store state when project video_url is null', async () => {
+    currentProjectData = { ...projectData, video_url: null };
+
+    render(<ProjectPage />);
+
+    await waitFor(() => {
+      expect(storeState.setProjectVideoUrl).toHaveBeenCalledWith(null);
+    });
+  });
+
 	it('renders run provider snapshot proof card from recoveryControl', () => {
 		storeState.recoveryControl = {
 			state: 'active',

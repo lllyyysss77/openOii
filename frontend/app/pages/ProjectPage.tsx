@@ -135,10 +135,10 @@ export function ProjectPage() {
 	}, [shots]);
 
 	useEffect(() => {
-		if (project?.video_url) {
-			useEditorStore.getState().setProjectVideoUrl(project.video_url);
+		if (project) {
+			useEditorStore.getState().setProjectVideoUrl(project.video_url ?? null);
 		}
-	}, [project?.video_url]);
+	}, [project]);
 
 	useEffect(() => {
 		if (projectId <= 0) return;

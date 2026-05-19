@@ -153,11 +153,19 @@ class Settings(BaseSettings):
         default=True,
         description="图生视频时，未配置 PUBLIC_BASE_URL 则尝试内联本地图片为 data URL",
     )
+    fake_video_fixture_url: str | None = Field(
+        default=None,
+        description="Fake 视频 Provider 使用的固定视频 URL（仅用于本地开发/测试）",
+    )
+    fake_video_fixture_path: str | None = Field(
+        default=None,
+        description="Fake 视频 Provider 使用的本地视频文件路径（仅用于本地开发/测试）",
+    )
 
     # 视频服务提供商选择
     video_provider: str = Field(
         default="openai",
-        description="视频服务提供商：openai（OpenAI 兼容接口）或 doubao（豆包）",
+        description="视频服务提供商：openai（OpenAI 兼容接口）、doubao（豆包）或 fake（本地开发/测试）",
     )
 
     request_timeout_s: float = 120.0

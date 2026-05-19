@@ -34,6 +34,18 @@ def test_create_video_service_doubao():
     assert isinstance(svc, DoubaoVideoService)
 
 
+def test_create_video_service_fake():
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        video_provider="fake",
+        fake_video_fixture_url="/static/videos/dev_clip.mp4",
+    )
+    svc = create_video_service(settings)
+    from app.services.fake_video import FakeVideoService
+
+    assert isinstance(svc, FakeVideoService)
+
+
 def test_create_video_service_unsupported():
     settings = Settings(
         database_url="sqlite+aiosqlite:///:memory:",

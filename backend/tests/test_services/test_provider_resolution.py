@@ -117,6 +117,23 @@ def test_resolver_marks_doubao_without_credentials_invalid() -> None:
     assert result.valid is False
 
 
+def test_resolver_accepts_fake_video_without_credentials() -> None:
+    settings = Settings(
+        image_api_key="image-key",
+        text_provider="anthropic",
+        anthropic_api_key="anthropic-key",
+        video_provider="fake",
+    )
+
+    result = resolve_project_provider_settings(make_project(), settings)
+
+    assert result.video.selected_key == "fake"
+    assert result.video.source == "default"
+    assert result.video.resolved_key == "fake"
+    assert result.video.valid is True
+    assert result.valid is True
+
+
 def test_resolver_is_deterministic_for_same_inputs() -> None:
     settings = Settings(
         text_provider="openai",
@@ -212,4 +229,31 @@ async def test_probe_text_provider_uses_nonzero_probe_retries(monkeypatch) -> No
     result = await probe_text_provider(settings)
 
     assert captured["max_retries"] == TEXT_PROBE_MAX_RETRIES
+    assert result.status == "valid"
+
+
+@pytest.mark.asyncio
+async def test_probe_text_provider_allows_slow_proxy_probe(monkeypatch) -> None:
+    settings = Settings(
+        text_provider="openai",
+        text_api_key="text-key",
+        text_base_url="https://text.example.com",
+        text_model="gpt-test",
+        text_endpoint="/chat/completions",
+        request_timeout_s=120,
+    )
+    captured: dict[str, float] = {}
+
+    class DummyTextService:
+        def __init__(self, probe_settings: Settings, *, max_retries: int = 0):
+            captured["request_timeout_s"] = probe_settings.request_timeout_s
+
+        async def probe(self) -> TextProviderCapability:
+            return TextProviderCapability(status="valid", generate=True, stream=True)
+
+    monkeypatch.setattr("app.services.provider_resolution.TextService", DummyTextService)
+
+    result = await probe_text_provider(settings)
+
+    assert captured["request_timeout_s"] == 60.0
     assert result.status == "valid"

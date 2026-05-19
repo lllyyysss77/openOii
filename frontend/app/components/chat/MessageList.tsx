@@ -154,7 +154,7 @@ export function MessageList({ messages }: MessageListProps) {
               </div>
             )}
             <div
-              className={`${isUserMessage ? "speech-bubble-user ml-3" : "speech-bubble mr-3"} text-sm leading-relaxed ${
+              className={`${isUserMessage ? "speech-bubble-user ml-3" : "speech-bubble mr-3"} select-text text-sm leading-relaxed ${
                 msg.role === "error"
                   ? "!bg-error/10 !text-error rounded-lg"
                   : ""
@@ -170,7 +170,7 @@ export function MessageList({ messages }: MessageListProps) {
                 </button>
               ) : (
                 <>
-                  <div className="whitespace-pre-wrap">
+                  <div className="whitespace-pre-wrap break-words select-text" data-copyable="true">
                     {enableTypewriter ? (
                       <TypewriterText
                         text={msg.content}

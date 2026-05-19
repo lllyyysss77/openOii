@@ -21,6 +21,8 @@ from app.orchestration.nodes import (
     route_after_shots_approval,
     route_after_character_images_approval,
     route_after_shot_images_approval,
+    route_after_compose_videos,
+    route_after_compose_merge,
     route_after_compose_approval,
     route_after_review,
     route_from_start,
@@ -67,6 +69,8 @@ def test_route_helpers_fall_back_to_expected_stages() -> None:
     assert route_after_shots_approval({}) == "render_characters"
     assert route_after_character_images_approval({}) == "render_shots"
     assert route_after_shot_images_approval({}) == "compose_videos"
+    assert route_after_compose_videos({}) == "compose_merge"
+    assert route_after_compose_merge({}) == "compose_approval"
     assert route_after_compose_approval({}) == "__end__"
     assert route_after_review({}) == "plan_characters"
     assert route_from_start({}) == "plan_characters"
@@ -413,6 +417,9 @@ async def test_compose_videos_skips_when_video_provider_invalid() -> None:
 
     assert executed == []  # compose agent was never called
     assert "stage:compose_videos" in state.get("artifact_lineage", [])
+    assert "stage:compose_merge" in state.get("artifact_lineage", [])
+    assert state["video_generation_skipped"] is True
+    assert route_after_compose_videos(state) == "__end__"
 
 
 def test_normalize_resume_value_handles_supported_shapes() -> None:

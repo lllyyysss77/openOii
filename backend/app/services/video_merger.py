@@ -7,11 +7,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
 import tempfile
 import uuid
 from pathlib import Path
 
 import httpx
+
+from app.services.file_cleaner import get_local_path
 
 logger = logging.getLogger(__name__)
 
@@ -49,19 +52,27 @@ class VideoMergerService:
             self._client = None
 
     async def download_video(self, url: str, dest_path: Path) -> None:
-        """下载视频文件
+        """下载或复制视频文件
 
         Args:
-            url: 视频 URL
+            url: 视频 URL 或本地 /static/... 路径
             dest_path: 目标路径
         """
+        local_path = get_local_path(url)
+        if local_path is not None:
+            if not local_path.is_file():
+                raise FileNotFoundError(f"Local video file not found: {local_path}")
+            shutil.copyfile(local_path, dest_path)
+            logger.info("Copied local video %s to %s", local_path, dest_path)
+            return
+
         client = await self._get_client()
         async with client.stream("GET", url) as response:
             response.raise_for_status()
             with open(dest_path, "wb") as f:
                 async for chunk in response.aiter_bytes(chunk_size=8192):
                     f.write(chunk)
-        logger.info(f"Downloaded video to {dest_path}")
+        logger.info("Downloaded video to %s", dest_path)
 
     async def merge_videos(
         self,
@@ -80,15 +91,16 @@ class VideoMergerService:
         if not video_urls:
             raise ValueError("No video URLs provided")
 
-        if len(video_urls) == 1:
-            # 只有一个视频，直接返回
-            return video_urls[0]
-
         # 生成输出文件名
         if not output_filename:
             output_filename = f"merged_{uuid.uuid4().hex[:8]}"
 
         output_path = self.output_dir / f"{output_filename}.mp4"
+
+        if len(video_urls) == 1:
+            await self.download_video(video_urls[0], output_path)
+            logger.info("Single video normalized to local output: %s", output_path)
+            return f"/static/videos/{output_filename}.mp4"
 
         # 创建临时目录存放下载的视频
         with tempfile.TemporaryDirectory() as temp_dir:

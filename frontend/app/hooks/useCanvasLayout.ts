@@ -7,7 +7,7 @@ import type {
 	PlanSectionShape,
 	StoryboardSectionShape,
 } from "~/components/canvas/shapes";
-import type { Character, Shot, WorkflowStage } from "~/types";
+import type { BlockingClip, Character, Shot, WorkflowStage } from "~/types";
 
 type SectionKey = "plan" | "render" | "compose";
 type SectionState = "draft" | "generating" | "blocked" | "complete";
@@ -15,16 +15,17 @@ type SectionState = "draft" | "generating" | "blocked" | "complete";
 interface LayoutConfig {
 	startX: number;
 	startY: number;
-	boardWidth: number;
+	columnGap: number;
+	rowGap: number;
+	cardWidth: number;
 }
 
 const DEFAULT_CONFIG: LayoutConfig = {
 	startX: 100,
 	startY: 100,
-	boardWidth: Math.min(
-		920,
-		(typeof window !== "undefined" ? window.innerWidth : 960) - 40,
-	),
+	columnGap: 80,
+	rowGap: 40,
+	cardWidth: 420,
 };
 
 const SECTION_ORDER: SectionKey[] = ["plan", "render", "compose"];
@@ -48,15 +49,11 @@ const SECTION_STATUS_LABELS: Record<SectionState, string> = {
 	complete: "已完成",
 };
 
-// Layout constants
-const CARD_GAP = 16;
-const SECTION_GAP = 24;
-const PLAN_SECTION_DEFAULT_H = 200;
-const CARD_DEFAULT_H = 380;
-const COMPOSE_DEFAULT_H = 300;
-// Default heights for section containers (will be updated by useDomSize)
-const CHARACTER_SECTION_DEFAULT_H = 400;
-const STORYBOARD_SECTION_DEFAULT_H = 400;
+const PLAN_CARD_H = 260;
+const CHARACTER_CARD_H = 360;
+const STORYBOARD_CARD_H = 420;
+const COMPOSE_CARD_H = 280;
+const RENDER_COLUMN_EXTRA_GAP = 80;
 
 interface UseCanvasLayoutProps {
 	projectId: number;
@@ -71,6 +68,7 @@ interface UseCanvasLayoutProps {
 	awaitingConfirm: boolean;
 	currentRunId: number | null;
 	currentStage: WorkflowStage;
+	blockingClips?: BlockingClip[] | null;
 	config?: Partial<LayoutConfig>;
 }
 
@@ -85,6 +83,7 @@ function deriveSectionState(
 		isGenerating: boolean;
 		awaitingConfirm: boolean;
 		currentRunId: number | null;
+		blockingClips?: BlockingClip[] | null;
 	},
 ): SectionState {
 	const isActive =
@@ -107,12 +106,13 @@ function deriveSectionState(
 			if (isActive) return "generating";
 			return "draft";
 		case "compose":
+			if (data.blockingClips?.length) return "blocked";
 			return data.videoUrl
 				? "complete"
-				: data.shots.length === 0
-					? "blocked"
-					: isActive
-						? "generating"
+				: isActive
+					? "generating"
+					: data.shots.length === 0
+						? "blocked"
 						: "draft";
 	}
 }
@@ -161,12 +161,12 @@ export function useCanvasLayout({
 	isGenerating,
 	awaitingConfirm,
 	currentRunId,
-	currentStage: _currentStage,
-	config: customConfig,
-}: UseCanvasLayoutProps) {
+	blockingClips,
+	config: partialConfig,
+}: UseCanvasLayoutProps): CanvasLayoutResult {
 	const config = useMemo(
-		() => ({ ...DEFAULT_CONFIG, ...customConfig }),
-		[customConfig],
+		() => ({ ...DEFAULT_CONFIG, ...partialConfig }),
+		[partialConfig],
 	);
 
 	const sectionData = useMemo(
@@ -179,6 +179,7 @@ export function useCanvasLayout({
 			isGenerating,
 			awaitingConfirm,
 			currentRunId,
+			blockingClips,
 		}),
 		[
 			story,
@@ -189,18 +190,18 @@ export function useCanvasLayout({
 			isGenerating,
 			awaitingConfirm,
 			currentRunId,
+			blockingClips,
 		],
 	);
 
-	const result = useMemo(() => {
+	return useMemo(() => {
 		const visibleSet = new Set(visibleSections);
-		const visibleList = SECTION_ORDER.filter((s) => visibleSet.has(s));
 		const sectionStates: Partial<Record<SectionKey, SectionState>> = {};
 		const placeholders: Partial<Record<SectionKey, boolean>> = {};
 		const statusLabels: Partial<Record<SectionKey, string>> = {};
 		const placeholderTexts: Partial<Record<SectionKey, string>> = {};
 
-		for (const section of visibleList) {
+		for (const section of SECTION_ORDER) {
 			const state = deriveSectionState(section, sectionData);
 			sectionStates[section] = state;
 			placeholders[section] = isPlaceholder(section, sectionData);
@@ -208,20 +209,27 @@ export function useCanvasLayout({
 			placeholderTexts[section] = SECTION_PLACEHOLDER_TEXT[section];
 		}
 
-		const shapes: TLShapePartial[] = [];
-		const { startX, startY, boardWidth } = config;
-		let currentY = startY;
+		if (blockingClips?.length) {
+			placeholderTexts.compose = blockingClips
+				.map((clip) => `镜头 ${clip.order}: ${clip.reason}`)
+				.join("；");
+		}
 
-		// --- Plan Section (full width) ---
+		const { startX, startY, columnGap, rowGap, cardWidth } = config;
+		const shapes: TLShapePartial[] = [];
+		const planX = startX;
+		const renderX = startX + cardWidth + columnGap;
+		const composeX = startX + (cardWidth + columnGap) * 2;
+
 		if (visibleSet.has("plan")) {
 			shapes.push({
 				id: createShapeId("plan-section"),
 				type: SHAPE_TYPES.PLAN_SECTION,
-				x: startX,
-				y: currentY,
+				x: planX,
+				y: startY,
 				props: {
-					w: boardWidth,
-					h: PLAN_SECTION_DEFAULT_H,
+					w: cardWidth,
+					h: PLAN_CARD_H,
 					projectId,
 					story: story || "",
 					summary: summary || "",
@@ -229,103 +237,95 @@ export function useCanvasLayout({
 					shots,
 					sectionState: sectionStates.plan ?? "draft",
 					placeholder: placeholders.plan ?? true,
-					statusLabel: statusLabels.plan ?? "待生成",
-					placeholderText: placeholderTexts.plan ?? "等待规划生成...",
+					statusLabel: statusLabels.plan ?? SECTION_STATUS_LABELS.draft,
+					placeholderText:
+						placeholderTexts.plan ?? SECTION_PLACEHOLDER_TEXT.plan,
 				},
 			} satisfies TLShapePartial<PlanSectionShape>);
-			currentY += PLAN_SECTION_DEFAULT_H + SECTION_GAP;
 		}
 
-		// --- Render Section (characters + shots grouped together) ---
 		if (visibleSet.has("render")) {
-			// Character Section (container for character cards)
-			const charSectionId = createShapeId("character-section");
-			const charRows = Math.max(1, Math.ceil(characters.length / 2));
-			const charSectionH =
-				characters.length > 0
-					? charRows * (CARD_DEFAULT_H + CARD_GAP)
-					: CHARACTER_SECTION_DEFAULT_H;
+			const characterRows = Math.max(1, Math.ceil(characters.length / 2));
+			const characterHeight = Math.max(
+				CHARACTER_CARD_H,
+				140 + characterRows * 220,
+			);
+			const shotRows = Math.max(1, Math.ceil(shots.length / 2));
+			const shotHeight = Math.max(STORYBOARD_CARD_H, 150 + shotRows * 230);
+			const characterY = startY;
+			const shotY = characterY + characterHeight + RENDER_COLUMN_EXTRA_GAP;
 
 			shapes.push({
-				id: charSectionId,
+				id: createShapeId("character-section"),
 				type: SHAPE_TYPES.CHARACTER_SECTION,
-				x: startX,
-				y: currentY,
+				x: renderX,
+				y: characterY,
 				props: {
-					w: boardWidth,
-					h: charSectionH,
+					w: cardWidth,
+					h: characterHeight,
 					characters,
+					sectionTitle: "角色设定",
 					sectionState: sectionStates.render ?? "draft",
 					placeholder: characters.length === 0,
-					statusLabel: statusLabels.render ?? "待生成",
-					placeholderText: placeholderTexts.render ?? "等待角色渲染生成...",
-					sectionTitle: "角色",
+					statusLabel: statusLabels.render ?? SECTION_STATUS_LABELS.draft,
+					placeholderText:
+						placeholderTexts.render ?? SECTION_PLACEHOLDER_TEXT.render,
 				},
 			} satisfies TLShapePartial<CharacterSectionShape>);
-			currentY += charSectionH + SECTION_GAP;
-
-			// Storyboard/Shot Section (container for shot cards)
-			const shotSectionId = createShapeId("storyboard-section");
-			const shotRows = Math.max(1, Math.ceil(shots.length / 2));
-			const shotSectionH =
-				shots.length > 0
-					? shotRows * (CARD_DEFAULT_H + CARD_GAP)
-					: STORYBOARD_SECTION_DEFAULT_H;
 
 			shapes.push({
-				id: shotSectionId,
+				id: createShapeId("storyboard-section"),
 				type: SHAPE_TYPES.STORYBOARD_SECTION,
-				x: startX,
-				y: currentY,
+				x: renderX,
+				y: shotY,
 				props: {
-					w: boardWidth,
-					h: shotSectionH,
+					w: cardWidth,
+					h: shotHeight,
 					shots,
 					sectionTitle: "分镜画面",
 					sectionState: sectionStates.render ?? "draft",
 					placeholder: shots.length === 0,
-					statusLabel: statusLabels.render ?? "待生成",
-					placeholderText: "等待分镜画面生成...",
+					statusLabel: statusLabels.render ?? SECTION_STATUS_LABELS.draft,
+					placeholderText:
+						placeholderTexts.render ?? SECTION_PLACEHOLDER_TEXT.render,
 				},
 			} satisfies TLShapePartial<StoryboardSectionShape>);
-			currentY += shotSectionH + SECTION_GAP;
 		}
 
-		// --- Compose Section (full width) ---
 		if (visibleSet.has("compose")) {
 			shapes.push({
 				id: createShapeId("compose-section"),
 				type: SHAPE_TYPES.COMPOSE_SECTION,
-				x: startX,
-				y: currentY,
+				x: composeX,
+				y: startY,
 				props: {
-					w: boardWidth,
-					h: COMPOSE_DEFAULT_H,
+					w: cardWidth,
+					h: COMPOSE_CARD_H,
 					projectId,
 					videoUrl: videoUrl || "",
 					videoTitle,
 					downloadUrl: `/api/v1/projects/${projectId}/final-video`,
 					sectionState: sectionStates.compose ?? "draft",
 					placeholder: placeholders.compose ?? true,
-					statusLabel: statusLabels.compose ?? "待生成",
-					placeholderText: placeholderTexts.compose ?? "等待视频合成...",
+					statusLabel: statusLabels.compose ?? SECTION_STATUS_LABELS.draft,
+					placeholderText:
+						placeholderTexts.compose ?? SECTION_PLACEHOLDER_TEXT.compose,
 				},
 			} satisfies TLShapePartial<ComposeSectionShape>);
 		}
 
 		return { shapes };
 	}, [
+		visibleSections,
+		sectionData,
+		blockingClips,
+		config,
+		projectId,
 		story,
 		summary,
 		characters,
 		shots,
 		videoUrl,
 		videoTitle,
-		config,
-		sectionData,
-		visibleSections,
-		projectId,
 	]);
-
-	return result;
 }

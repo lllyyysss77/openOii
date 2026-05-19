@@ -66,4 +66,8 @@ def create_video_service(settings: Settings) -> VideoServiceProtocol:
         from app.services.video import VideoService
 
         return VideoService(settings)
+    if provider == "fake":
+        from app.services.fake_video import FakeVideoService
+
+        return FakeVideoService(settings)
     raise ValueError(f"Unsupported video provider: {settings.video_provider}")
