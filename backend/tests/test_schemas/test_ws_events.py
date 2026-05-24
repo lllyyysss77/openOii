@@ -1,12 +1,24 @@
 from __future__ import annotations
 
+import re
+from pathlib import Path
+from typing import get_args
+
 import pytest
 
+from app.schemas.export import ExportCompletedEventData
 from app.schemas.ws import (
+    AgentThinkingEventData,
+    AudioGeneratedEventData,
+    BibleUpdatedEventData,
     CharacterCreatedEventData,
     CharacterDeletedEventData,
+    CharacterUpdatedEventData,
+    ConsistencyEvalCompletedEventData,
+    CritiqueResultEventData,
     DataClearedEventData,
     ErrorEventData,
+    OutlineUpdatedEventData,
     ProjectUpdatedEventData,
     RunAwaitingConfirmEventData,
     RunCancelledEventData,
@@ -18,6 +30,10 @@ from app.schemas.ws import (
     RunStartedEventData,
     ShotCreatedEventData,
     ShotDeletedEventData,
+    ShotUpdatedEventData,
+    VersionCreatedEventData,
+    VersionRollbackEventData,
+    WsEventType,
     WsEvent,
 )
 from app.ws.manager import _EVENT_DATA_MODELS
@@ -100,13 +116,62 @@ RECOVERY_SUMMARY_DATA = {
 
 class TestWsEventSchemaRegistry:
     def test_all_event_types_have_data_models(self):
-        from app.schemas.ws import WsEventType
-
-        all_types = WsEventType.__args__
+        all_types = get_args(WsEventType)
         for etype in all_types:
             if etype in ("connected", "pong", "echo"):
                 continue
             assert etype in _EVENT_DATA_MODELS, f"{etype} missing from _EVENT_DATA_MODELS"
+
+    def test_backend_and_frontend_ws_event_type_unions_match(self):
+        frontend_types = _frontend_ws_event_types()
+        backend_types = set(get_args(WsEventType))
+        assert frontend_types == backend_types
+
+    @pytest.mark.parametrize(
+        ("event_type", "model"),
+        [
+            ("run_started", RunStartedEventData),
+            ("run_progress", RunProgressEventData),
+            ("run_message", RunMessageEventData),
+            ("agent_thinking", AgentThinkingEventData),
+            ("run_completed", RunCompletedEventData),
+            ("run_failed", RunFailedEventData),
+            ("run_awaiting_confirm", RunAwaitingConfirmEventData),
+            ("run_confirmed", RunConfirmedEventData),
+            ("run_cancelled", RunCancelledEventData),
+            ("character_created", CharacterCreatedEventData),
+            ("character_updated", CharacterUpdatedEventData),
+            ("character_deleted", CharacterDeletedEventData),
+            ("shot_created", ShotCreatedEventData),
+            ("shot_updated", ShotUpdatedEventData),
+            ("shot_deleted", ShotDeletedEventData),
+            ("outline_updated", OutlineUpdatedEventData),
+            ("project_updated", ProjectUpdatedEventData),
+            ("data_cleared", DataClearedEventData),
+            ("error", ErrorEventData),
+            ("critique_result", CritiqueResultEventData),
+            ("bible_updated", BibleUpdatedEventData),
+            ("version_created", VersionCreatedEventData),
+            ("version_rollback", VersionRollbackEventData),
+            ("audio_generated", AudioGeneratedEventData),
+            ("export_completed", ExportCompletedEventData),
+            ("consistency_eval_completed", ConsistencyEvalCompletedEventData),
+        ],
+    )
+    def test_event_registry_points_to_expected_schema(self, event_type, model):
+        assert _EVENT_DATA_MODELS[event_type] is model
+
+
+def _frontend_ws_event_types() -> set[str]:
+    types_file = Path(__file__).resolve().parents[3] / "frontend" / "app" / "types" / "index.ts"
+    text = types_file.read_text()
+    match = re.search(
+        r"export\s+type\s+WsEventType\s*=\s*(?P<body>.*?);",
+        text,
+        flags=re.DOTALL,
+    )
+    assert match is not None, "frontend WsEventType union not found"
+    return set(re.findall(r'"([^"]+)"', match.group("body")))
 
 
 class TestRunStartedEventData:
@@ -359,6 +424,10 @@ class TestProjectUpdatedEventData:
                     "title": "Test",
                     "video_url": "http://example.com/video.mp4",
                     "status": "completed",
+                    "exports": ["/static/exports/story.pdf"],
+                    "universe_id": 7,
+                    "chapter_number": 2,
+                    "chapter_title": "第二章",
                     "blocking_clips": [
                         {"shot_id": 1, "order": 1, "status": "blocked", "reason": "missing"}
                     ],
@@ -366,6 +435,10 @@ class TestProjectUpdatedEventData:
             }
         )
         assert d.project.video_url == "http://example.com/video.mp4"
+        assert d.project.exports == ["/static/exports/story.pdf"]
+        assert d.project.universe_id == 7
+        assert d.project.chapter_number == 2
+        assert d.project.chapter_title == "第二章"
         assert d.project.blocking_clips is not None and len(d.project.blocking_clips) == 1
 
     def test_minimal(self):

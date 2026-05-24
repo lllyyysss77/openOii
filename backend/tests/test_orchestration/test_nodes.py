@@ -38,7 +38,7 @@ class TestStateHelpers:
         assert next_production_stage("render_shots") == "compose_videos"
 
     def test_next_production_stage_compose_merge(self):
-        assert next_production_stage("compose_merge") is None
+        assert next_production_stage("compose_merge") == "add_audio"
 
     def test_next_production_stage_approval_suffix(self):
         assert next_production_stage("characters_approval") == "plan_shots"
@@ -50,25 +50,26 @@ class TestStateHelpers:
         assert next_production_stage("review") is None
 
     def test_workflow_progress_plan_characters_start(self):
-        assert workflow_progress_for_stage("plan_characters") == 0.0
+        assert workflow_progress_for_stage("plan_outline") == 0.0
 
     def test_workflow_progress_plan_characters_half(self):
+        # plan_characters is at index 1 of 8 production stages
         assert workflow_progress_for_stage("plan_characters", within_stage=0.5) == pytest.approx(
-            0.5 / 6
+            1.5 / 8
         )
 
     def test_workflow_progress_render_characters_start(self):
-        assert workflow_progress_for_stage("render_characters") == pytest.approx(2 / 6)
+        assert workflow_progress_for_stage("render_characters") == pytest.approx(3 / 8)
 
     def test_workflow_progress_compose_videos(self):
-        assert workflow_progress_for_stage("compose_videos") == pytest.approx(4 / 6)
+        assert workflow_progress_for_stage("compose_videos") == pytest.approx(5 / 8)
 
     def test_workflow_progress_compose_merge_full(self):
-        assert workflow_progress_for_stage("compose_merge", within_stage=1.0) == 1.0
+        assert workflow_progress_for_stage("add_audio", within_stage=1.0) == 1.0
 
     def test_workflow_progress_clamps(self):
-        assert workflow_progress_for_stage("plan_characters", within_stage=2.0) == pytest.approx(
-            1 / 6
+        assert workflow_progress_for_stage("plan_outline", within_stage=2.0) == pytest.approx(
+            1 / 8
         )
 
     def test_workflow_progress_unknown(self):
@@ -76,12 +77,14 @@ class TestStateHelpers:
 
     def test_production_stage_sequence(self):
         assert PRODUCTION_STAGE_SEQUENCE == (
+            "plan_outline",
             "plan_characters",
             "plan_shots",
             "render_characters",
             "render_shots",
             "compose_videos",
             "compose_merge",
+            "add_audio",
         )
 
 
@@ -163,7 +166,7 @@ class TestRouteFunctions:
         assert route_from_start({"current_stage": "render_characters"}) == "render_characters"
 
     def test_route_from_start_default(self):
-        assert route_from_start({}) == "plan_characters"
+        assert route_from_start({}) == "plan_outline"
 
     def test_route_after_characters_approval_no_review(self):
         assert route_after_characters_approval({}) == "plan_shots"
@@ -178,7 +181,7 @@ class TestRouteFunctions:
         assert route_after_shots_approval({}) == "render_characters"
 
     def test_route_after_shot_images_approval_no_review(self):
-        assert route_after_shot_images_approval({}) == "compose_videos"
+        assert route_after_shot_images_approval({}) == "critique_shot_images"
 
     def test_route_after_compose_approval_no_review(self):
         from langgraph.graph import END

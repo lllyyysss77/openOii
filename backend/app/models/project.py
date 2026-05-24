@@ -1,11 +1,14 @@
 from datetime import datetime
-from typing import List, Optional, cast
+from typing import TYPE_CHECKING, List, Optional, cast
 
 from sqlalchemy import Column, JSON
 from sqlalchemy.orm import declared_attr
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.db.utils import utcnow
+
+if TYPE_CHECKING:
+    from app.models.universe import Universe, UniverseProjectLink
 
 
 class Project(SQLModel, table=True):
@@ -16,6 +19,9 @@ class Project(SQLModel, table=True):
     story: Optional[str] = None
     style: str = Field(default="anime")
     summary: Optional[str] = None  # 剧情摘要
+    story_outline: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=True))
+    visual_bible: Optional[str] = None
+    outline_approved: bool = Field(default=False)
     video_url: Optional[str] = None  # 最终拼接视频
     status: str = Field(default="draft")
     text_provider_override: Optional[str] = None
@@ -24,9 +30,16 @@ class Project(SQLModel, table=True):
     target_shot_count: Optional[int] = None
     character_hints: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=True))
     creation_mode: Optional[str] = None
+    universe_id: Optional[int] = Field(default=None, foreign_key="universe.id")
+    chapter_number: Optional[int] = None
+    chapter_title: Optional[str] = None
     reference_images: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=True))
+    exports: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=True))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+    universe: Optional["Universe"] = Relationship(back_populates="projects")
+    universe_link: Optional["UniverseProjectLink"] = Relationship(back_populates="project")
 
     characters: List["Character"] = Relationship(
         back_populates="project",
@@ -46,6 +59,9 @@ class Character(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    reference_images: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=True))
+    face_embedding: Optional[str] = Field(default=None)  # JSON string of 512-dim float list
+    visual_notes: Optional[str] = None  # Character visual bible text
     approved_name: Optional[str] = None
     approved_description: Optional[str] = None
     approved_image_url: Optional[str] = None
@@ -94,6 +110,8 @@ class Shot(SQLModel, table=True):
     lighting: Optional[str] = None
     dialogue: Optional[str] = None
     sfx: Optional[str] = None
+    tts_url: Optional[str] = None  # TTS 音频文件 URL
+    bgm_type: Optional[str] = None  # 使用的 BGM 类型（suspense/warm/action/sad/happy/ambient）
     seed: Optional[int] = None
     character_ids: list[int] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     approved_description: Optional[str] = None

@@ -114,7 +114,8 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
                   src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${title || "最终视频"}`)}`}
                 />
               </video>
-              <div className="flex gap-1.5 justify-end">
+              <div className="flex gap-1.5 justify-end items-center">
+                <SvgIcon name="volume-2" size={12} className="text-base-content/40" />
                 <a
                   href={getStaticUrl(videoUrl) ?? undefined}
                   download

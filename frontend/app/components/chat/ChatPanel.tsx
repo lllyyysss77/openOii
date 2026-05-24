@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
 import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
+import { OutlinePreviewCard } from "./OutlinePreviewCard";
 import { Button } from "~/components/ui/Button";
 import type { WorkflowStage } from "~/types";
 import { AGENT_NAME_MAP } from "~/types";
@@ -59,6 +60,7 @@ export function ChatPanel({
     currentStage,
     currentRunId,
     runMode,
+    recoveryGate,
   } = useEditorStore(useShallow((s) => ({
     messages: s.messages,
     currentAgent: s.currentAgent,
@@ -67,6 +69,7 @@ export function ChatPanel({
     currentStage: s.currentStage,
     currentRunId: s.currentRunId,
     runMode: s.runMode,
+    recoveryGate: s.recoveryGate,
   })));
 
   const setRunMode = useEditorStore((s) => s.setRunMode);
@@ -100,6 +103,8 @@ export function ChatPanel({
   const isYolo = runMode === "yolo";
 
   const showManualConfirm = awaitingConfirm && !isYolo;
+  const showOutlinePreview =
+    showManualConfirm && awaitingAgent === "outline" && recoveryGate?.story_outline;
 
   return (
     <div className="flex flex-col h-full bg-base-100">
@@ -189,7 +194,24 @@ export function ChatPanel({
         )}
       </div>
 
-      {showManualConfirm && (
+      {showOutlinePreview && recoveryGate?.story_outline && (
+        <div className="px-2.5 py-2 border-t-2 border-primary/30 bg-primary/5">
+          <OutlinePreviewCard
+            outline={recoveryGate.story_outline}
+            visualBible={recoveryGate.visual_bible}
+            onConfirm={() => {
+              onConfirm(undefined);
+              setInput("");
+            }}
+            onRegenerate={(feedback) => {
+              onConfirm(feedback);
+              setInput("");
+            }}
+          />
+        </div>
+      )}
+
+      {showManualConfirm && !showOutlinePreview && (
         <div className="px-2.5 py-1.5 border-t-2 border-primary/30 bg-primary/5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-base-content/60 font-medium">

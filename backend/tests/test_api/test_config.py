@@ -343,7 +343,7 @@ async def test_test_image_connection_success(monkeypatch, test_settings):
             assert size == "1024x1024"
             assert n == 1
 
-    monkeypatch.setattr("app.services.image.ImageService", FakeImageService)
+    monkeypatch.setattr("app.services.image_factory.create_image_service", lambda settings: FakeImageService(settings))
 
     result = await config_routes._test_image_connection(test_settings)
 
@@ -360,7 +360,7 @@ async def test_test_image_connection_reports_auth_failure(monkeypatch, test_sett
         async def generate(self, prompt, size, n):
             raise RuntimeError("401 unauthorized")
 
-    monkeypatch.setattr("app.services.image.ImageService", FakeImageService)
+    monkeypatch.setattr("app.services.image_factory.create_image_service", lambda settings: FakeImageService(settings))
 
     result = await config_routes._test_image_connection(test_settings)
 
@@ -377,7 +377,7 @@ async def test_test_image_connection_reports_forbidden(monkeypatch, test_setting
         async def generate(self, prompt, size, n):
             raise RuntimeError("403 forbidden")
 
-    monkeypatch.setattr("app.services.image.ImageService", FakeImageService)
+    monkeypatch.setattr("app.services.image_factory.create_image_service", lambda settings: FakeImageService(settings))
 
     result = await config_routes._test_image_connection(test_settings)
 
@@ -394,7 +394,7 @@ async def test_test_image_connection_reports_not_found(monkeypatch, test_setting
         async def generate(self, prompt, size, n):
             raise RuntimeError("404 not found")
 
-    monkeypatch.setattr("app.services.image.ImageService", FakeImageService)
+    monkeypatch.setattr("app.services.image_factory.create_image_service", lambda settings: FakeImageService(settings))
 
     result = await config_routes._test_image_connection(test_settings)
 
@@ -411,7 +411,7 @@ async def test_test_image_connection_reports_generic_error(monkeypatch, test_set
         async def generate(self, prompt, size, n):
             raise RuntimeError("bad gateway")
 
-    monkeypatch.setattr("app.services.image.ImageService", FakeImageService)
+    monkeypatch.setattr("app.services.image_factory.create_image_service", lambda settings: FakeImageService(settings))
 
     result = await config_routes._test_image_connection(test_settings)
 
@@ -424,7 +424,7 @@ async def test_test_image_connection_reports_outer_exception(monkeypatch, test_s
     def _boom(*args, **kwargs):
         raise RuntimeError("init failed")
 
-    monkeypatch.setattr("app.services.image.ImageService", _boom)
+    monkeypatch.setattr("app.services.image_factory.create_image_service", _boom)
 
     result = await config_routes._test_image_connection(test_settings)
 
@@ -441,7 +441,7 @@ async def test_test_image_connection_success_through_route(monkeypatch, test_set
         async def generate(self, prompt, size, n):
             return None
 
-    monkeypatch.setattr("app.services.image.ImageService", FakeImageService)
+    monkeypatch.setattr("app.services.image_factory.create_image_service", lambda settings: FakeImageService(settings))
     result = await config_routes._test_image_connection(test_settings)
     assert result.success is True
 
@@ -451,7 +451,7 @@ async def test_test_image_connection_reports_exception_in_factory(monkeypatch, t
     def _boom(*args, **kwargs):
         raise RuntimeError("factory failed")
 
-    monkeypatch.setattr("app.services.image.ImageService", _boom)
+    monkeypatch.setattr("app.services.image_factory.create_image_service", _boom)
 
     result = await config_routes._test_image_connection(test_settings)
 

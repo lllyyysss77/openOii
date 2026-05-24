@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 function Bomb(): React.ReactNode {
@@ -7,6 +7,23 @@ function Bomb(): React.ReactNode {
 }
 
 describe("ErrorBoundary", () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  const preventExpectedError = (event: ErrorEvent) => {
+    if (event.error instanceof Error && event.error.message === "boom") {
+      event.preventDefault();
+    }
+  };
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    window.addEventListener("error", preventExpectedError);
+  });
+
+  afterEach(() => {
+    window.removeEventListener("error", preventExpectedError);
+    consoleErrorSpy.mockRestore();
+  });
+
   it("renders children when no error", () => {
     render(
       <ErrorBoundary>
@@ -17,7 +34,6 @@ describe("ErrorBoundary", () => {
   });
 
   it("renders error UI when child throws", () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <ErrorBoundary>
         <Bomb />
@@ -25,22 +41,18 @@ describe("ErrorBoundary", () => {
     );
     expect(screen.getByText("出错了")).toBeInTheDocument();
     expect(screen.getByText("boom")).toBeInTheDocument();
-    spy.mockRestore();
   });
 
   it("renders custom fallback when provided", () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <ErrorBoundary fallback={<div>custom fallback</div>}>
         <Bomb />
       </ErrorBoundary>
     );
     expect(screen.getByText("custom fallback")).toBeInTheDocument();
-    spy.mockRestore();
   });
 
   it("resets error state on retry click", () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <ErrorBoundary>
         <Bomb />
@@ -49,6 +61,5 @@ describe("ErrorBoundary", () => {
     expect(screen.getByText("出错了")).toBeInTheDocument();
     fireEvent.click(screen.getByText("重试"));
     // After reset, children render again (Bomb still throws)
-    spy.mockRestore();
   });
 });

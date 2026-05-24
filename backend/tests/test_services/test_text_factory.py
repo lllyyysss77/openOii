@@ -31,6 +31,18 @@ def test_create_text_service_anthropic():
     assert isinstance(svc, LLMService)
 
 
+def test_create_text_service_fake():
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        text_provider="fake",
+        fake_text_response="local response",
+    )
+    svc = create_text_service(settings)
+    from app.services.fake_text import FakeTextService
+
+    assert isinstance(svc, FakeTextService)
+
+
 def test_create_text_service_unsupported():
     settings = Settings(
         database_url="sqlite+aiosqlite:///:memory:",

@@ -54,7 +54,11 @@ class Settings(BaseSettings):
     # ============================================
     text_provider: str = Field(
         default="anthropic",
-        description="文本生成服务提供商：anthropic / openai",
+        description="文本生成服务提供商：anthropic / openai / fake（本地开发/测试，不调用外部 API）",
+    )
+    fake_text_response: str | None = Field(
+        default=None,
+        description="Fake 文本 Provider 使用的固定响应（仅用于本地开发/测试）",
     )
 
     # OpenAI 兼容接口
@@ -79,6 +83,10 @@ class Settings(BaseSettings):
     # ============================================
     # 图像生成服务 (OpenAI 兼容接口)
     # ============================================
+    image_provider: str = Field(
+        default="openai",
+        description="图像生成服务提供商：openai 或 fake（本地开发/测试，不调用外部 API）",
+    )
     image_base_url: str = Field(
         default="https://api.openai.com/v1",
         description="图像生成服务基础地址",
@@ -95,6 +103,28 @@ class Settings(BaseSettings):
     enable_image_to_image: bool = Field(
         default=False,
         description="是否启用图生图（分镜首帧 I2I 参考图）",
+    )
+    fake_image_fixture_url: str | None = Field(
+        default=None,
+        description="Fake 图像 Provider 使用的固定图片 URL（仅用于本地开发/测试）",
+    )
+
+    # --- Critic (Quality Review) ---
+    critique_enabled: bool = Field(
+        default=True,
+        description="是否启用 Critic 质量审查闭环",
+    )
+    critique_score_threshold: float = Field(
+        default=6.0,
+        description="质量分阈值，低于此分数触发重新生成",
+    )
+    critique_max_rounds: int = Field(
+        default=2,
+        description="最大审查重试轮数（超过后强制继续）",
+    )
+    outline_enabled: bool = Field(
+        default=True,
+        description="是否启用分层故事大纲审批流程",
     )
 
     # ============================================
@@ -166,6 +196,46 @@ class Settings(BaseSettings):
     video_provider: str = Field(
         default="openai",
         description="视频服务提供商：openai（OpenAI 兼容接口）、doubao（豆包）或 fake（本地开发/测试）",
+    )
+
+    # ============================================
+    # TTS / BGM 配置（Edge TTS + 内置 BGM，完全免费）
+    # ============================================
+    tts_enabled: bool = Field(
+        default=True,
+        description="是否启用 TTS 配音（Edge TTS，免费无需 API Key）",
+    )
+    tts_default_voice: str = Field(
+        default="zh-CN-XiaoxiaoNeural",
+        description="默认 TTS 语音名称",
+    )
+    bgm_enabled: bool = Field(
+        default=True,
+        description="是否启用 BGM 背景音乐",
+    )
+    bgm_volume: float = Field(
+        default=0.3,
+        description="BGM 音量（0-1）",
+    )
+    tts_volume: float = Field(
+        default=1.0,
+        description="TTS 音量（0-1）",
+    )
+    bgm_directory: str = Field(
+        default="static/bgm",
+        description="BGM 文件目录（相对于 app 目录）",
+    )
+
+    # ============================================
+    # 思考链可视化
+    # ============================================
+    thinking_chain_enabled: bool = Field(
+        default=True,
+        description="是否推送 Agent 思考链消息",
+    )
+    thinking_chain_detail_level: str = Field(
+        default="normal",
+        description="思考链详细级别：minimal（仅 decision）/ normal（decision + reviewing）/ verbose（全部）",
     )
 
     request_timeout_s: float = 120.0

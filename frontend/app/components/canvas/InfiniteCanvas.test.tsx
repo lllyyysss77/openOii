@@ -161,6 +161,7 @@ const mockEditor = vi.hoisted(() => {
 });
 
 vi.mock("@tanstack/react-query", () => ({
+	useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 	useQuery: () => ({
 		data: {
 			id: 1,

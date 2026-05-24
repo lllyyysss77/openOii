@@ -21,7 +21,7 @@ def build_phase2_runtime_context(
     *,
     orchestrator: Any,
     agent_context: Any,
-    start_stage: Phase2Stage = "plan",
+    start_stage: Phase2Stage = "plan_outline",
     auto_mode: bool = False,
 ) -> Phase2RuntimeContext:
     return Phase2RuntimeContext(

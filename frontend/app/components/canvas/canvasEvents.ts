@@ -1,6 +1,6 @@
 import type { ShotUpdatePayload } from "~/types";
 
-export type ShapeActionName = "add-to-assets" | "approve" | "edit" | "regenerate";
+export type ShapeActionName = "add-to-assets" | "approve" | "edit" | "history" | "regenerate";
 
 export interface ShapeActionPayload {
   shapeId: string;
@@ -17,6 +17,7 @@ export interface CanvasEvents {
   "preview-image": { src: string; alt: string };
   "preview-video": { src: string; title: string };
   "shape-action": ShapeActionPayload;
+  "version-history": { entityType: "character" | "shot"; entityId: number };
 }
 
 type EventCallback<T> = (data: T) => void;

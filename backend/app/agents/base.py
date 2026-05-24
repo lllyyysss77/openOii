@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,13 +12,16 @@ from app.models.agent_run import AgentRun
 from app.models.message import Message
 from app.models.project import Project
 from app.schemas.project import CharacterRead, ShotRead
-from app.services.image import ImageService
-from app.services.llm import LLMResponse, LLMService
+from app.services.image_factory import ImageServiceProtocol
+from app.services.llm import LLMResponse
+from app.services.text_factory import TextServiceProtocol
 from app.services.video_factory import VideoServiceProtocol
 from app.ws.manager import ConnectionManager
 
 if TYPE_CHECKING:
     from app.models.project import Character
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,8 +53,8 @@ class AgentContext:
     ws: ConnectionManager
     project: Project
     run: AgentRun
-    llm: LLMService
-    image: ImageService
+    llm: TextServiceProtocol
+    image: ImageServiceProtocol
     video: VideoServiceProtocol
     user_feedback: str | None = None
     feedback_type: str | None = None  # "plan" | "character" | "shot" | "compose"
@@ -115,6 +119,71 @@ class BaseAgent:
             ctx.project.id,
             {"type": "run_message", "data": data},
         )
+
+    # Phase visibility map for detail levels
+    _PHASE_VISIBILITY: dict[str, set[str]] = {
+        "minimal": {"decision"},
+        "normal": {"decision", "reviewing"},
+        "verbose": {"reasoning", "decision", "planning", "reviewing"},
+    }
+
+    async def send_thinking(
+        self,
+        ctx: AgentContext,
+        phase: Literal["reasoning", "decision", "planning", "reviewing"],
+        content: str,
+        details: str | None = None,
+    ) -> None:
+        """发送思考链消息
+
+        根据 thinking_chain_enabled 和 thinking_chain_detail_level 过滤推送。
+        消息推送为轻量 WS 写入，不会显著阻塞主流程。
+
+        Args:
+            ctx: Agent 上下文
+            phase: 思考阶段 (reasoning/decision/planning/reviewing)
+            content: 思考内容
+            details: 可选补充详情
+        """
+        if not ctx.settings.thinking_chain_enabled:
+            return
+
+        detail_level = getattr(ctx.settings, "thinking_chain_detail_level", "normal") or "normal"
+        visible_phases = self._PHASE_VISIBILITY.get(detail_level, self._PHASE_VISIBILITY["normal"])
+        if phase not in visible_phases:
+            return
+
+        try:
+            # 1. Send dedicated agent_thinking WS event
+            await ctx.ws.send_event(
+                ctx.project.id,
+                {
+                    "type": "agent_thinking",
+                    "data": {
+                        "agent": self.name,
+                        "phase": phase,
+                        "content": content,
+                        "details": details,
+                    },
+                },
+            )
+            # 2. Also send as run_message with role="thinking" for backward-compatible display
+            data: dict[str, Any] = {
+                "agent": self.name,
+                "role": "thinking",
+                "content": content,
+                "project_id": ctx.project.id,
+                "run_id": ctx.run.id,
+            }
+            if details:
+                data["summary"] = content
+                data["content"] = f"{content}\n{details}"
+            await ctx.ws.send_event(
+                ctx.project.id,
+                {"type": "run_message", "data": data},
+            )
+        except Exception:
+            logger.debug("send_thinking failed (non-critical)", exc_info=True)
 
     async def send_character_event(
         self, ctx: AgentContext, character: Any, event_type: str = "character_created"

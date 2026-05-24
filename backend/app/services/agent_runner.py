@@ -11,9 +11,9 @@ from app.db.utils import utcnow
 from app.models.agent_run import AgentRun
 from app.models.project import Project
 from app.orchestration.state import workflow_progress_for_stage
-from app.services.image import ImageService
-from app.services.llm import LLMService
+from app.services.image_factory import create_image_service
 from app.services.task_manager import task_manager
+from app.services.text_factory import create_text_service
 from app.services.video_factory import create_video_service
 from app.ws.manager import ConnectionManager
 
@@ -51,8 +51,8 @@ async def run_agent_plan(
                 ws=ws,
                 project=project,
                 run=run,
-                llm=LLMService(settings),
-                image=ImageService(settings),
+                llm=create_text_service(settings),
+                image=create_image_service(settings),
                 video=create_video_service(settings),
                 target_ids=target_ids,
             )

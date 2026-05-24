@@ -7,13 +7,20 @@ from typing import Any
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
+from app.schemas.export import ExportCompletedEventData
 from app.schemas.ws import (
+    AgentThinkingEventData,
+    AudioGeneratedEventData,
+    BibleUpdatedEventData,
     CharacterCreatedEventData,
     CharacterDeletedEventData,
     CharacterUpdatedEventData,
+    ConsistencyEvalCompletedEventData,
+    CritiqueResultEventData,
     DataClearedEventData,
     ErrorEventData,
     ProjectUpdatedEventData,
+    OutlineUpdatedEventData,
     RunAwaitingConfirmEventData,
     RunCancelledEventData,
     RunCompletedEventData,
@@ -25,6 +32,8 @@ from app.schemas.ws import (
     ShotCreatedEventData,
     ShotDeletedEventData,
     ShotUpdatedEventData,
+    VersionCreatedEventData,
+    VersionRollbackEventData,
     WsEvent,
 )
 
@@ -44,9 +53,18 @@ _EVENT_DATA_MODELS: dict[str, type[Any]] = {
     "shot_created": ShotCreatedEventData,
     "shot_updated": ShotUpdatedEventData,
     "shot_deleted": ShotDeletedEventData,
+    "outline_updated": OutlineUpdatedEventData,
     "project_updated": ProjectUpdatedEventData,
     "data_cleared": DataClearedEventData,
     "error": ErrorEventData,
+    "critique_result": CritiqueResultEventData,
+    "bible_updated": BibleUpdatedEventData,
+    "agent_thinking": AgentThinkingEventData,
+    "audio_generated": AudioGeneratedEventData,
+    "version_created": VersionCreatedEventData,
+    "version_rollback": VersionRollbackEventData,
+    "export_completed": ExportCompletedEventData,
+    "consistency_eval_completed": ConsistencyEvalCompletedEventData,
 }
 
 

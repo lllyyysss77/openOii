@@ -4,12 +4,20 @@ import asyncio
 import logging
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.base import AgentContext, BaseAgent, CompletionInfo
 from app.agents.utils import build_character_context
 from app.models.project import Character, Shot
+from app.models.style_template import StyleTemplate
+from app.services.character_bible import (
+    auto_populate_visual_notes,
+    build_character_bible,
+    compute_face_embedding,
+)
 from app.services.image_composer import ImageComposer
 from app.services.shot_binding import resolve_shot_bound_approved_characters
+from app.services.version_service import VersionService, character_snapshot, shot_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -20,41 +28,81 @@ class RenderAgent(BaseAgent):
     def __init__(self):
         super().__init__()
         self.image_composer = ImageComposer()
+        self.version_service = VersionService()
+
+    # Hardcoded fallback mapping used when no StyleTemplate row exists
+    _FALLBACK_STYLE_MAP = {
+        "anime": "anime, 2D illustration, cel-shading, vibrant colors, Japanese animation style",
+        "shonen": "anime, shonen style, high contrast, dynamic composition, dramatic lighting, bold lines",
+        "slice-of-life": "anime, slice of life, soft pastel colors, warm lighting, rounded lines, cozy atmosphere",
+        "manga": "manga style, black and white, halftone dots, speed lines, high contrast ink",
+        "donghua": "Chinese animation, ink wash, flowing lines, oriental color palette, watercolor textures",
+        "cinematic": "cinematic, photorealistic, 35mm film grain, natural lighting, shallow depth of field",
+        "pixar": "3D cartoon, Pixar-style rendering, smooth surfaces, global illumination, rounded shapes",
+        "lowpoly": "low poly, geometric, faceted surfaces, hard edge lighting, minimalist palette",
+        "watercolor": "watercolor, soft bleeding edges, transparent layering, white space breathing, painterly",
+        "sketch": "pencil sketch, cross-hatching, monochrome shading, rough lines, hand-drawn",
+        "realistic": "photorealistic, natural lighting, detailed textures, real-world proportions",
+    }
+
+    async def _lookup_style_template(self, session: "AsyncSession", style: str) -> StyleTemplate | None:
+        """Look up a StyleTemplate by slug from the database."""
+        res = await session.execute(
+            select(StyleTemplate).where(
+                StyleTemplate.slug == style,
+                StyleTemplate.is_active.is_(True),
+            )
+        )
+        return res.scalar_one_or_none()
 
     def _style_descriptor(self, style: str) -> str:
-        mapping = {
-            "anime": "anime, 2D illustration, cel-shading, vibrant colors, Japanese animation style",
-            "shonen": "anime, shonen style, high contrast, dynamic composition, dramatic lighting, bold lines",
-            "slice-of-life": "anime, slice of life, soft pastel colors, warm lighting, rounded lines, cozy atmosphere",
-            "manga": "manga style, black and white, halftone dots, speed lines, high contrast ink",
-            "donghua": "Chinese animation, ink wash, flowing lines, oriental color palette, watercolor textures",
-            "cinematic": "cinematic, photorealistic, 35mm film grain, natural lighting, shallow depth of field",
-            "pixar": "3D cartoon, Pixar-style rendering, smooth surfaces, global illumination, rounded shapes",
-            "lowpoly": "low poly, geometric, faceted surfaces, hard edge lighting, minimalist palette",
-            "watercolor": "watercolor, soft bleeding edges, transparent layering, white space breathing, painterly",
-            "sketch": "pencil sketch, cross-hatching, monochrome shading, rough lines, hand-drawn",
-            "realistic": "photorealistic, natural lighting, detailed textures, real-world proportions",
-        }
-        return mapping.get(style, mapping.get("anime"))
+        """Synchronous fallback — used when no session is available."""
+        return self._FALLBACK_STYLE_MAP.get(style, self._FALLBACK_STYLE_MAP.get("anime"))
 
-    def _build_character_prompt(self, character: Character, *, style: str) -> str:
+    async def _style_descriptor_async(self, session: "AsyncSession", style: str) -> tuple[str, str | None]:
+        """Look up StyleTemplate from DB and return (style_prompt, negative_prompt).
+
+        Falls back to hardcoded mapping if template not found.
+        """
+        template = await self._lookup_style_template(session, style)
+        if template:
+            color_part = ", ".join(template.color_palette) if template.color_palette else ""
+            prompt = template.style_prompt
+            if color_part:
+                prompt = f"{prompt}, {color_part}"
+            return prompt, template.negative_prompt
+        # Fallback to hardcoded mapping
+        return self._style_descriptor(style), None
+
+    async def _build_character_prompt(self, character: Character, *, style: str, session: "AsyncSession") -> str:
         desc = character.description or character.name
-        style_desc = self._style_descriptor(style)
-        # 面部锚定词：强调清晰五官，提升一致性
+        # Inject visual_notes into the prompt if available
+        if character.visual_notes:
+            desc = f"{desc}, {character.visual_notes}"
+        style_desc, negative = await self._style_descriptor_async(session, style)
         face_anchor = "detailed face, clear facial features, sharp eyes"
-        return f"{desc}, {face_anchor}, {style_desc}"
+        prompt = f"{desc}, {face_anchor}, {style_desc}"
+        if negative:
+            prompt += f" || negative: {negative}"
+        return prompt
 
-    def _build_shot_prompt(self, shot: Shot, characters: list[Character], *, style: str) -> str:
+    async def _build_shot_prompt(self, shot: Shot, characters: list[Character], *, style: str, session: "AsyncSession") -> str:
         desc = shot.image_prompt or shot.description
         parts = [desc.strip()]
+        # Inject character bible text for each character
+        for char in characters:
+            bible_text = build_character_bible(char)
+            if bible_text:
+                parts.append(f"Character {char.name}: {bible_text}")
         char_context = build_character_context(characters)
         if char_context:
             parts.append(char_context)
-        # 面部一致性锚定词
         if characters:
             parts.append("same character face as reference, consistent identity")
-        style_desc = self._style_descriptor(style)
+        style_desc, negative = await self._style_descriptor_async(session, style)
         parts.append(style_desc)
+        if negative:
+            parts.append(f"|| negative: {negative}")
         return ", ".join(parts)
 
     async def _render_characters(self, ctx: AgentContext) -> int:
@@ -72,6 +120,15 @@ class RenderAgent(BaseAgent):
             return 0
 
         total = len(characters)
+
+        # Thinking: planning phase — starting character rendering
+        await self.send_thinking(
+            ctx,
+            phase="planning",
+            content="正在构建角色形象描述，注入风格和面部锚定词...",
+            details=f"共 {total} 个角色待生成，风格：{ctx.project.style or '默认'}",
+        )
+
         await self.send_message(
             ctx, f"开始为 {total} 个角色生成形象图...", progress=0.0, is_loading=True
         )
@@ -86,11 +143,82 @@ class RenderAgent(BaseAgent):
                     current=i,
                     message=f"   正在绘制：{char.name} ({i + 1}/{total})",
                 )
-                image_prompt = self._build_character_prompt(char, style=style)
+                image_prompt = await self._build_character_prompt(char, style=style, session=ctx.session)
+                version = await self.version_service.auto_snapshot_character(
+                    ctx.session,
+                    char,
+                    run_id=ctx.run.id,
+                    trigger="generation",
+                )
+                if version is not None:
+                    await ctx.session.flush()
+                    await ctx.ws.send_event(
+                        ctx.project.id,
+                        {
+                            "type": "version_created",
+                            "data": {
+                                "entity_type": "character",
+                                "entity_id": char.id,
+                                "version": version.version,
+                                "trigger": version.trigger,
+                            },
+                        },
+                    )
+                # Thinking: reasoning for each character
+                await self.send_thinking(
+                    ctx,
+                    phase="reasoning",
+                    content=f"为 {char.name} 生成形象图，prompt 长度 {len(image_prompt)} 字符",
+                )
                 external_url = await self.generate_and_cache_image(ctx, prompt=image_prompt)
                 char.image_url = external_url
                 ctx.session.add(char)
                 await ctx.session.flush()
+
+                # Auto-populate visual_notes if missing
+                if not char.visual_notes and char.description:
+                    try:
+                        visual_notes = await auto_populate_visual_notes(char, ctx.llm)
+                        if visual_notes:
+                            char.visual_notes = visual_notes
+                            ctx.session.add(char)
+                            await ctx.session.flush()
+                    except Exception as e:
+                        logger.warning("Failed to auto-populate visual_notes for %s: %s", char.name, e)
+
+                # Auto-compute face embedding after image is generated
+                if not char.face_embedding and external_url:
+                    try:
+                        embedding = await compute_face_embedding(external_url)
+                        if embedding is not None:
+                            import json
+                            char.face_embedding = json.dumps(embedding)
+                            ctx.session.add(char)
+                            await ctx.session.flush()
+                            logger.info("Computed face embedding for character %s", char.name)
+                    except Exception as e:
+                        logger.warning("Failed to compute face embedding for %s: %s", char.name, e)
+
+                current_version = await self.version_service.create_version(
+                    ctx.session,
+                    "character",
+                    char.id,
+                    character_snapshot(char),
+                    run_id=ctx.run.id,
+                    trigger="generation",
+                )
+                await ctx.ws.send_event(
+                    ctx.project.id,
+                    {
+                        "type": "version_created",
+                        "data": {
+                            "entity_type": "character",
+                            "entity_id": char.id,
+                            "version": current_version.version,
+                            "trigger": current_version.trigger,
+                        },
+                    },
+                )
                 await self.send_character_event(ctx, char, "character_updated")
                 updated_count += 1
             except Exception as e:
@@ -126,6 +254,14 @@ class RenderAgent(BaseAgent):
         failed_count = 0
         style = ctx.project.style or ""
 
+        # Thinking: planning phase — starting shot rendering
+        await self.send_thinking(
+            ctx,
+            phase="planning",
+            content=f"开始为 {total} 个分镜生成首帧图片...",
+            details="使用角色参考图和风格描述",
+        )
+
         await self.send_message(
             ctx,
             f"开始为 {total} 个分镜生成首帧图片（使用角色参考图）...",
@@ -141,6 +277,15 @@ class RenderAgent(BaseAgent):
 
                 characters = await resolve_shot_bound_approved_characters(ctx.session, shot)
                 char_image_urls = [c.image_url for c in characters if c.image_url]
+
+                # Thinking: reasoning for each shot
+                n_refs = len(char_image_urls)
+                await self.send_thinking(
+                    ctx,
+                    phase="reasoning",
+                    content=f"分镜 #{shot.order} 使用了 {n_refs} 个角色参考图",
+                )
+
                 reference_image_bytes: bytes | None = None
 
                 if char_image_urls:
@@ -163,7 +308,27 @@ class RenderAgent(BaseAgent):
                         "No character images available for shot %d; using text-to-image", shot.id
                     )
 
-                image_prompt = self._build_shot_prompt(shot, characters, style=style)
+                image_prompt = await self._build_shot_prompt(shot, characters, style=style, session=ctx.session)
+                version = await self.version_service.auto_snapshot_shot(
+                    ctx.session,
+                    shot,
+                    run_id=ctx.run.id,
+                    trigger="generation",
+                )
+                if version is not None:
+                    await ctx.session.flush()
+                    await ctx.ws.send_event(
+                        ctx.project.id,
+                        {
+                            "type": "version_created",
+                            "data": {
+                                "entity_type": "shot",
+                                "entity_id": shot.id,
+                                "version": version.version,
+                                "trigger": version.trigger,
+                            },
+                        },
+                    )
 
                 image_url = await self.generate_and_cache_image(
                     ctx,
@@ -175,6 +340,26 @@ class RenderAgent(BaseAgent):
                 shot.image_url = image_url
                 ctx.session.add(shot)
                 await ctx.session.flush()
+                current_version = await self.version_service.create_version(
+                    ctx.session,
+                    "shot",
+                    shot.id,
+                    shot_snapshot(shot),
+                    run_id=ctx.run.id,
+                    trigger="generation",
+                )
+                await ctx.ws.send_event(
+                    ctx.project.id,
+                    {
+                        "type": "version_created",
+                        "data": {
+                            "entity_type": "shot",
+                            "entity_id": shot.id,
+                            "version": current_version.version,
+                            "trigger": current_version.trigger,
+                        },
+                    },
+                )
                 await self.send_shot_event(ctx, shot, "shot_updated")
                 updated_count += 1
 

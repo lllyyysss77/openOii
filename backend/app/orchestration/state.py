@@ -6,46 +6,62 @@ from typing import Annotated, Any, Literal, TypedDict
 
 
 Phase2Stage = Literal[
+    "plan_outline",
+    "outline_approval",
     "plan_characters",
     "characters_approval",
     "plan_shots",
     "shots_approval",
     "render_characters",
     "character_images_approval",
+    "critique_character_images",
     "render_shots",
     "shot_images_approval",
+    "critique_shot_images",
     "compose_videos",
     "compose_merge",
+    "add_audio",
     "compose_approval",
     "review",
 ]
 
 # Ordered sequence of production stages (excludes approval gates).
 PRODUCTION_STAGE_SEQUENCE: tuple[str, ...] = (
+    "plan_outline",
     "plan_characters",
     "plan_shots",
     "render_characters",
     "render_shots",
     "compose_videos",
     "compose_merge",
+    "add_audio",
 )
 
 
 # Approval gate → the production stage it comes right after
 _APPROVAL_TO_PRODUCED_STAGE: dict[str, str] = {
+    "outline_approval": "plan_outline",
     "characters_approval": "plan_characters",
     "shots_approval": "plan_shots",
     "character_images_approval": "render_characters",
     "shot_images_approval": "render_shots",
-    "compose_approval": "compose_merge",
+    "compose_approval": "add_audio",
+}
+
+_CRITIQUE_TO_PRODUCED_STAGE: dict[str, str] = {
+    "critique_character_images": "render_characters",
+    "critique_shot_images": "render_shots",
 }
 
 
 def _resolve_base_stage(stage: str) -> str | None:
-    """Map any stage (production or approval) to its production stage."""
+    """Map any stage (production or approval or critique) to its production stage."""
     if stage in PRODUCTION_STAGE_SEQUENCE:
         return stage
-    return _APPROVAL_TO_PRODUCED_STAGE.get(stage)
+    base = _APPROVAL_TO_PRODUCED_STAGE.get(stage)
+    if base is not None:
+        return base
+    return _CRITIQUE_TO_PRODUCED_STAGE.get(stage)
 
 
 def next_production_stage(stage: str | None) -> str | None:
@@ -85,11 +101,13 @@ class Phase2State(TypedDict, total=False):
     route_stage: str
     route_mode: str
     video_generation_skipped: bool
+    critique_scores: dict
+    critique_round: int
 
 
 @dataclass(slots=True)
 class Phase2RuntimeContext:
     orchestrator: Any
     agent_context: Any
-    start_stage: Phase2Stage = "plan_characters"
+    start_stage: Phase2Stage = "plan_outline"
     auto_mode: bool = False

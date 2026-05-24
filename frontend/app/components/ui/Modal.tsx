@@ -88,7 +88,7 @@ export function Modal({ isOpen, onClose, title, children, actions }: ModalProps)
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button onClick={onClose} aria-label="关闭对话框">关闭</button>
+        <button type="button" onClick={onClose} aria-label="关闭对话框">关闭</button>
       </form>
     </dialog>
   );

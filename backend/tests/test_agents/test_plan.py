@@ -153,6 +153,11 @@ async def test_plan_agent_full_mode_creates_characters_and_shots(test_session, t
     assert shots[0].description == "Hero enters the forest"
     assert shots[0].scene == "forest"
     assert shots[0].image_prompt == "anime style hero in forest"
+    assert shots[0].prompt == "slow zoom"
+    assert shots[0].duration == 5.0
+    assert shots[0].camera == "wide shot"
+    assert shots[0].motion_note == "slow zoom"
+    assert shots[0].character_ids == [chars[0].id]
 
     events = ctx.ws.events
     project_events = [e for pid, e in events if e["type"] == "project_updated"]
@@ -221,6 +226,7 @@ async def test_plan_agent_composes_video_prompt_when_missing(test_session, test_
     assert len(shots) == 1
     assert "tracking shot" in shots[0].prompt
     assert "running" in shots[0].prompt
+    assert shots[0].motion_note == shots[0].prompt
 
 
 @pytest.mark.asyncio

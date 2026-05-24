@@ -8,6 +8,7 @@ import {
   HandRaisedIcon,
   LightBulbIcon,
   PaintBrushIcon,
+  SparklesIcon,
   UserIcon,
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
@@ -23,6 +24,7 @@ const agentColors: Record<string, string> = {
   review: "text-accent",
   system: "text-base-content/30",
   user: "text-primary",
+  audio: "text-secondary",
 };
 
 const agentIcons: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
@@ -32,16 +34,94 @@ const agentIcons: Record<string, React.ComponentType<React.SVGProps<SVGSVGElemen
   review: CogIcon,
   system: CogIcon,
   user: UserIcon,
+  audio: HandRaisedIcon,
 };
 
 const MIN_TYPEWRITER_LENGTH = 50;
 
 const agentNameMap = AGENT_NAME_MAP;
 
+const phaseLabelMap: Record<string, string> = {
+  reasoning: "REASONING",
+  decision: "DECISION",
+  planning: "PLANNING",
+  reviewing: "REVIEWING",
+};
+
+const phaseColorMap: Record<string, string> = {
+  reasoning: "badge-info",
+  decision: "badge-warning",
+  planning: "badge-primary",
+  reviewing: "badge-accent",
+};
+
+function ThinkingMessage({ msg }: { msg: AgentMessage }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const phaseLabel = msg.phase ? phaseLabelMap[msg.phase] || msg.phase.toUpperCase() : "";
+  const phaseBadge = msg.phase ? phaseColorMap[msg.phase] || "badge-ghost" : "badge-ghost";
+  const AgentIcon = agentIcons[msg.agent] || SparklesIcon;
+  const firstLine = msg.content.split("\n")[0] || msg.content;
+
+  return (
+    <div className="group">
+      <div className="flex items-center gap-1 mb-0.5">
+        <AgentIcon className={`w-3 h-3 ${agentColors[msg.agent] || "text-base-content/30"}`} aria-hidden="true" />
+        <span className="text-xs font-comic uppercase tracking-wide text-base-content/40">{agentNameMap[msg.agent] || msg.agent}</span>
+        {phaseLabel && (
+          <span className={`badge ${phaseBadge} badge-xs ml-1 font-mono text-[10px]`}>{phaseLabel}</span>
+        )}
+      </div>
+      <div
+        className="ml-1 mr-3 rounded-lg px-3 py-2 bg-info/5 border border-info/10 select-text cursor-pointer hover:bg-info/10 transition-colors"
+        onClick={() => setIsExpanded((prev) => !prev)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsExpanded((prev) => !prev);
+          }
+        }}
+        aria-label="查看思考过程"
+      >
+        <div className="flex items-start gap-1.5">
+          <LightBulbIcon className="w-4 h-4 flex-shrink-0 text-info/70" aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            {isExpanded ? (
+              <div className="whitespace-pre-wrap break-words text-xs text-base-content/60 leading-relaxed">
+                {msg.content}
+                {msg.details && (
+                  <div className="mt-1 text-base-content/40 border-t border-info/10 pt-1">
+                    {msg.details}
+                  </div>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
+                  className="mt-1 text-xs text-base-content/40 hover:text-base-content/60 transition-colors"
+                >
+                  收起思考
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs text-base-content/50 leading-relaxed truncate">{firstLine}</p>
+                <span className="text-[10px] text-base-content/30 hover:text-base-content/50 transition-colors">
+                  查看思考过程
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function shouldFilterOut(msg: AgentMessage): boolean {
   if (msg.role === "info" && msg.agent === "system") return true;
   if (msg.role === "separator") return false;
   if (msg.role === "handoff") return false;
+  if (msg.role === "thinking") return false;
   if (!msg.content?.trim() && !msg.isLoading) return true;
   return false;
 }
@@ -66,7 +146,7 @@ export function MessageList({ messages }: MessageListProps) {
 
   const shouldEnableTypewriter = useCallback((msg: AgentMessage, isLastMessage: boolean): boolean => {
     if (msg.role === "user") return false;
-    if (msg.role === "separator" || msg.role === "handoff" || msg.role === "info") return false;
+    if (msg.role === "separator" || msg.role === "handoff" || msg.role === "info" || msg.role === "thinking") return false;
     if (msg.content.length < MIN_TYPEWRITER_LENGTH) return false;
     if (completedMessagesRef.current.has(msg.id || "")) return false;
     if (msg.isLoading) return true;
@@ -135,6 +215,12 @@ export function MessageList({ messages }: MessageListProps) {
                 <span className="text-xs">{msg.content}</span>
               </div>
             </div>
+          );
+        }
+
+        if (msg.role === "thinking") {
+          return (
+            <ThinkingMessage key={key} msg={msg} />
           );
         }
 

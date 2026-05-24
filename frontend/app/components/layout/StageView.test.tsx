@@ -22,10 +22,10 @@ vi.mock("~/components/canvas/InfiniteCanvas", () => ({
 }));
 
 describe("StageView projected shell", () => {
-  it("opens empty ideate projects into the projected canvas shell", () => {
+  it("opens empty ideate projects into the projected canvas shell", async () => {
     render(<StageView projectId={42} />);
 
-    expect(screen.getByTestId("projected-canvas")).toHaveTextContent("project:42");
+    expect(await screen.findByTestId("projected-canvas")).toHaveTextContent("project:42");
     expect(screen.queryByText("构思你的故事")).not.toBeInTheDocument();
   });
 });

@@ -224,52 +224,57 @@ def test_style_descriptor_manga():
     assert "manga" in result
 
 
-def test_build_character_prompt():
+@pytest.mark.asyncio
+async def test_build_character_prompt(test_session):
     from app.models.project import Character as CharModel
 
     agent = RenderAgent()
     char = CharModel(id=1, project_id=1, name="Hero", description="brave warrior", image_url=None)
-    result = agent._build_character_prompt(char, style="anime")
+    result = await agent._build_character_prompt(char, style="anime", session=test_session)
     assert "brave warrior" in result
     assert "anime" in result
 
 
-def test_build_character_prompt_no_description():
+@pytest.mark.asyncio
+async def test_build_character_prompt_no_description(test_session):
     from app.models.project import Character as CharModel
 
     agent = RenderAgent()
     char = CharModel(id=1, project_id=1, name="Hero", description=None, image_url=None)
-    result = agent._build_character_prompt(char, style="anime")
+    result = await agent._build_character_prompt(char, style="anime", session=test_session)
     assert "Hero" in result
 
 
-def test_build_shot_prompt():
+@pytest.mark.asyncio
+async def test_build_shot_prompt(test_session):
     from app.models.project import Character as CharModel, Shot as ShotModel
 
     agent = RenderAgent()
     shot = ShotModel(id=1, project_id=1, order=1, description="test", image_prompt="hero in forest", prompt=None, scene=None, action=None, expression=None, camera=None, lighting=None, dialogue=None, sfx=None, duration=None, image_url=None, video_url=None, character_ids=[])
     chars: list[CharModel] = []
-    result = agent._build_shot_prompt(shot, chars, style="anime")
+    result = await agent._build_shot_prompt(shot, chars, style="anime", session=test_session)
     assert "hero in forest" in result
     assert "anime" in result
 
 
-def test_build_shot_prompt_no_image_prompt():
+@pytest.mark.asyncio
+async def test_build_shot_prompt_no_image_prompt(test_session):
     from app.models.project import Shot as ShotModel
 
     agent = RenderAgent()
     shot = ShotModel(id=1, project_id=1, order=1, description="fallback desc", image_prompt=None, prompt=None, scene=None, action=None, expression=None, camera=None, lighting=None, dialogue=None, sfx=None, duration=None, image_url=None, video_url=None, character_ids=[])
-    result = agent._build_shot_prompt(shot, [], style="cinematic")
+    result = await agent._build_shot_prompt(shot, [], style="cinematic", session=test_session)
     assert "fallback desc" in result
 
 
-def test_build_shot_prompt_with_characters():
+@pytest.mark.asyncio
+async def test_build_shot_prompt_with_characters(test_session):
     from app.models.project import Character as CharModel, Shot as ShotModel
 
     agent = RenderAgent()
     shot = ShotModel(id=1, project_id=1, order=1, description="test", image_prompt="scene", prompt=None, scene=None, action=None, expression=None, camera=None, lighting=None, dialogue=None, sfx=None, duration=None, image_url=None, video_url=None, character_ids=[])
     char = CharModel(id=1, project_id=1, name="Hero", description="warrior", image_url=None)
-    result = agent._build_shot_prompt(shot, [char], style="anime")
+    result = await agent._build_shot_prompt(shot, [char], style="anime", session=test_session)
     assert "Hero" in result
 
 

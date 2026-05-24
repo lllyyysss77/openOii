@@ -19,6 +19,31 @@ def _mock_session_maker(session):
     return _maker
 
 
+class _NoopEngine:
+    def begin(self):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+
+    async def run_sync(self, fn):
+        return None
+
+
+def _init_db_patches(test_session, test_settings):
+    return (
+        patch("app.db.session.get_settings", return_value=test_settings),
+        patch("app.db.session._run_alembic_upgrade"),
+        patch("app.db.session.engine", _NoopEngine()),
+        patch("app.db.session._sync_missing_metadata_columns"),
+        patch("app.db.session.async_session_maker", _mock_session_maker(test_session)),
+        patch("app.db.session.ensure_postgres_checkpointer_setup"),
+    )
+
+
 @pytest.mark.asyncio
 async def test_init_db_cancels_stale_runs(test_session, test_settings):
     project = Project(title="t", story="s", style="anime")
@@ -38,10 +63,8 @@ async def test_init_db_cancels_stale_runs(test_session, test_settings):
     test_session.add_all([run_queued, run_running, run_done])
     await test_session.commit()
 
-    with patch("app.db.session.get_settings", return_value=test_settings), \
-         patch("app.db.session._run_alembic_upgrade"), \
-         patch("app.db.session.async_session_maker", _mock_session_maker(test_session)), \
-         patch("app.orchestration.persistence.ensure_postgres_checkpointer_setup"):
+    patches = _init_db_patches(test_session, test_settings)
+    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
         await init_db()
 
     stale = (await test_session.execute(
@@ -62,10 +85,8 @@ async def test_init_db_sets_default_style(test_session, test_settings):
     await test_session.commit()
     await test_session.refresh(project)
 
-    with patch("app.db.session.get_settings", return_value=test_settings), \
-         patch("app.db.session._run_alembic_upgrade"), \
-         patch("app.db.session.async_session_maker", _mock_session_maker(test_session)), \
-         patch("app.orchestration.persistence.ensure_postgres_checkpointer_setup"):
+    patches = _init_db_patches(test_session, test_settings)
+    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
         await init_db()
 
     updated = (await test_session.execute(
@@ -76,10 +97,8 @@ async def test_init_db_sets_default_style(test_session, test_settings):
 
 @pytest.mark.asyncio
 async def test_init_db_alembic_timeout(test_session, test_settings):
-    with patch("app.db.session.get_settings", return_value=test_settings), \
-         patch("app.db.session._run_alembic_upgrade"), \
-         patch("app.db.session.async_session_maker", _mock_session_maker(test_session)), \
-         patch("app.orchestration.persistence.ensure_postgres_checkpointer_setup"), \
+    patches = _init_db_patches(test_session, test_settings)
+    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
          patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
         await init_db()
 
@@ -88,8 +107,10 @@ async def test_init_db_alembic_timeout(test_session, test_settings):
 async def test_init_db_alembic_failure(test_session, test_settings):
     with patch("app.db.session.get_settings", return_value=test_settings), \
          patch("app.db.session._run_alembic_upgrade", side_effect=RuntimeError("alembic died")), \
+         patch("app.db.session.engine", _NoopEngine()), \
+         patch("app.db.session._sync_missing_metadata_columns"), \
          patch("app.db.session.async_session_maker", _mock_session_maker(test_session)), \
-         patch("app.orchestration.persistence.ensure_postgres_checkpointer_setup"):
+         patch("app.db.session.ensure_postgres_checkpointer_setup"):
         await init_db()
 
 

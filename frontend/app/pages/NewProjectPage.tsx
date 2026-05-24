@@ -3,16 +3,17 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { projectsApi } from "~/services/api";
 import { ProviderSelectionFields } from "~/components/project/ProviderSelectionFields";
+import { StyleTemplateGrid } from "~/components/project/StyleTemplateGrid";
+import { CreateStyleModal } from "~/components/project/CreateStyleModal";
+import { UniverseSelector } from "~/components/universe/UniverseSelector";
 import { Button } from "~/components/ui/Button";
 import { Input } from "~/components/ui/Input";
 import { Card } from "~/components/ui/Card";
 import {
-  BookOpenIcon,
   CheckCircleIcon,
   DocumentTextIcon,
-  FilmIcon,
+  GlobeAltIcon,
   PaintBrushIcon,
-  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import { toast } from "~/utils/toast";
 import { ApiError } from "~/types/errors";
@@ -21,6 +22,7 @@ export function NewProjectPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
+  const [showCreateStyle, setShowCreateStyle] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     story: "",
@@ -28,6 +30,7 @@ export function NewProjectPage() {
     text_provider_override: null as string | null,
     image_provider_override: null as string | null,
     video_provider_override: null as string | null,
+    universe_id: null as number | null,
   });
 
   const createMutation = useMutation({
@@ -38,7 +41,6 @@ export function NewProjectPage() {
         title: "创建成功",
         message: "项目已创建，正在跳转...",
       });
-      // 自动开始生成
       navigate(`/project/${project.id}?autoStart=true`);
     },
     onError: (error: Error | ApiError) => {
@@ -60,15 +62,6 @@ export function NewProjectPage() {
     if (!formData.title.trim()) return;
     createMutation.mutate(formData);
   };
-
-  const styles = [
-    { id: "cinematic", name: "电影风格", icon: FilmIcon },
-    { id: "anime", name: "动漫风格", icon: SparklesIcon },
-    { id: "comic", name: "漫画风格", icon: BookOpenIcon },
-    { id: "watercolor", name: "水彩风格", icon: PaintBrushIcon },
-  ];
-
-  const selectedStyle = styles.find((s) => s.id === formData.style);
 
   return (
     <div className="min-h-screen bg-base-100">
@@ -123,6 +116,22 @@ export function NewProjectPage() {
                   }
                 />
               </div>
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text text-sm font-bold">所属宇宙（可选）</span>
+                </label>
+                <UniverseSelector
+                  value={formData.universe_id}
+                  onChange={(id) =>
+                    setFormData({ ...formData, universe_id: id })
+                  }
+                />
+                <label className="label">
+                  <span className="label-text-alt text-xs text-base-content/40">
+                    选择宇宙后，角色会自动从共享角色库导入
+                  </span>
+                </label>
+              </div>
               <div className="flex justify-end">
                 <Button
                   onClick={() => setStep(2)}
@@ -145,25 +154,12 @@ export function NewProjectPage() {
               </span>
             }
           >
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              {styles.map((style) => {
-                const StyleIcon = style.icon;
-                return (
-                  <button
-                    type="button"
-                    key={style.id}
-                    className={`card bg-base-300 p-6 text-center transition-all hover:scale-105 ${
-                      formData.style === style.id
-                        ? "ring-2 ring-primary"
-                        : ""
-                    }`}
-                    onClick={() => setFormData({ ...formData, style: style.id })}
-                  >
-                    <StyleIcon className="w-6 h-6 mx-auto mb-2" aria-hidden="true" />
-                    <span className="font-medium">{style.name}</span>
-                  </button>
-                );
-              })}
+            <div className="mb-6">
+              <StyleTemplateGrid
+                selectedSlug={formData.style}
+                onSelect={(slug) => setFormData({ ...formData, style: slug })}
+                onCreateNew={() => setShowCreateStyle(true)}
+              />
             </div>
             <div className="mb-6 border-t border-base-300 pt-6">
               <div className="mb-4">
@@ -206,13 +202,15 @@ export function NewProjectPage() {
               <div className="bg-base-300 rounded-lg p-4">
                 <h3 className="font-semibold text-lg">{formData.title}</h3>
                 <div className="badge badge-outline mt-2 flex items-center gap-2 text-base-content">
-                  {selectedStyle && (
-                    <>
-                      <selectedStyle.icon className="w-5 h-5" aria-hidden="true" />
-                      {selectedStyle.name}
-                    </>
-                  )}
+                  <PaintBrushIcon className="w-5 h-5" aria-hidden="true" />
+                  {formData.style}
                 </div>
+                {formData.universe_id && (
+                  <div className="badge badge-primary mt-2 ml-2 inline-flex items-center gap-1">
+                    <GlobeAltIcon className="w-3 h-3" aria-hidden="true" />
+                    属于宇宙
+                  </div>
+                )}
                 {formData.story && (
                   <p className="text-sm text-base-content/70 mt-3 line-clamp-4">
                     {formData.story}
@@ -260,6 +258,16 @@ export function NewProjectPage() {
           </div>
         )}
       </main>
+
+      {/* Create Style Modal */}
+      <CreateStyleModal
+        isOpen={showCreateStyle}
+        onClose={() => setShowCreateStyle(false)}
+        onCreated={(slug) => {
+          setFormData({ ...formData, style: slug });
+          setShowCreateStyle(false);
+        }}
+      />
     </div>
   );
 }

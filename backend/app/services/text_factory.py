@@ -23,6 +23,10 @@ def create_text_service(settings: Settings) -> TextServiceProtocol:
     Returns:
         LLMService（Anthropic）或 TextService（OpenAI 兼容）
     """
+    if settings.text_provider == "fake":
+        from app.services.fake_text import FakeTextService
+
+        return FakeTextService(settings)
     if settings.text_provider == "openai":
         return TextService(settings)
     if settings.text_provider == "anthropic":

@@ -13,6 +13,8 @@ const HomePage = lazy(() => import("./pages/HomePage").then(m => ({ default: m.H
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage").then(m => ({ default: m.ProjectsPage })));
 const NewProjectPage = lazy(() => import("./pages/NewProjectPage").then(m => ({ default: m.NewProjectPage })));
 const ProjectPage = lazy(() => import("./pages/ProjectPage").then(m => ({ default: m.ProjectPage })));
+const UniversesPage = lazy(() => import("./pages/UniversesPage").then(m => ({ default: m.UniversesPage })));
+const UniverseDetailPage = lazy(() => import("./pages/UniverseDetailPage").then(m => ({ default: m.UniverseDetailPage })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +40,9 @@ export function App() {
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/project/new" element={<NewProjectPage />} />
               <Route path="/project/:id" element={<ProjectPage />} />
+              <Route path="/projects/:id" element={<ProjectPage />} />
+              <Route path="/universes" element={<UniversesPage />} />
+              <Route path="/universes/:universeId" element={<UniverseDetailPage />} />
             </Routes>
           </Suspense>
           {/* 全局设置弹窗 - 在所有页面都可用 */}

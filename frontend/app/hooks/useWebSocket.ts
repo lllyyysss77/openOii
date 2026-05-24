@@ -1,8 +1,15 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useEditorStore, type RunMode } from "~/stores/editorStore";
+import { getStaticUrl } from "~/services/api";
 import type {
 	AgentMessage,
+	AgentThinkingEventData,
+	AudioGeneratedEventData,
 	Character,
+	VersionCreatedEventData,
+	VersionRollbackEventData,
+	CritiqueResultEventData,
+	OutlineUpdatedEventData,
 	ProjectUpdatedPayload,
 	RunAwaitingConfirmEventData,
 	RunCompletedEventData,
@@ -345,11 +352,28 @@ export function applyWsEvent(
 				timestamp: new Date().toISOString(),
 				progress: msgProgress,
 				isLoading: event.data.isLoading as boolean | undefined,
+				// Carry thinking phase/details if present
+				phase: event.data.phase as AgentMessage["phase"],
+				details: event.data.details as string | null | undefined,
 			};
 			if (isTransientProgressMessage(message)) {
 				cleanupStaleMessages(store, agent);
 			}
 			store.addMessage(message);
+			break;
+		}
+
+		case "agent_thinking": {
+			const td = event.data as unknown as AgentThinkingEventData;
+			store.addMessage({
+				id: generateMessageId(),
+				agent: td.agent,
+				role: "thinking",
+				content: td.content,
+				timestamp: new Date().toISOString(),
+				phase: td.phase,
+				details: td.details ?? undefined,
+			});
 			break;
 		}
 
@@ -363,6 +387,10 @@ export function applyWsEvent(
 			store.setAwaitingConfirm(true, gate.agent, gate.run_id);
 			store.setRecoveryGate(gate);
 			store.setRecoverySummary(gate.recovery_summary);
+			if (gate.agent === "outline") {
+				store.setProjectStoryOutline(gate.story_outline ?? null);
+				store.setProjectVisualBible(gate.visual_bible ?? null);
+			}
 			applyStage(store, event.data);
 			store.addMessage({
 				id: generateMessageId(),
@@ -497,6 +525,15 @@ export function applyWsEvent(
 			break;
 		}
 
+		case "outline_updated": {
+			const od = event.data as unknown as OutlineUpdatedEventData;
+			store.setProjectStoryOutline(od.story_outline ?? null);
+			store.setProjectVisualBible(od.visual_bible ?? null);
+			store.setProjectOutlineApproved(od.outline_approved);
+			store.setProjectUpdatedAt(Date.now());
+			break;
+		}
+
 		case "project_updated": {
 			const pd = event.data.project as ProjectUpdatedPayload | undefined;
 			if (pd) {
@@ -511,7 +548,16 @@ export function applyWsEvent(
 					style: (v) => store.setProjectStyle(v),
 					target_shot_count: (v) => store.setProjectTargetShotCount(v),
 					character_hints: (v) => store.setProjectCharacterHints(v),
+					creation_mode: (v) => store.setProjectCreationMode(v),
 					reference_images: (v) => store.setProjectReferenceImages(v),
+					exports: (v) => store.setProjectExports(v),
+					provider_settings: (v) => store.setProjectProviderSettings(v),
+					universe_id: (v) => store.setProjectUniverseId(v),
+					chapter_number: (v) => store.setProjectChapterNumber(v),
+					chapter_title: (v) => store.setProjectChapterTitle(v),
+					story_outline: (v) => store.setProjectStoryOutline(v),
+					visual_bible: (v) => store.setProjectVisualBible(v),
+					outline_approved: (v) => store.setProjectOutlineApproved(Boolean(v)),
 					blocking_clips: (v) => store.setBlockingClips(v),
 				};
 				for (const [key, setter] of Object.entries(fieldSetters)) {
@@ -520,6 +566,128 @@ export function applyWsEvent(
 				}
 			}
 			store.setProjectUpdatedAt(Date.now());
+			break;
+		}
+
+		case "critique_result": {
+			const critData = event.data as unknown as CritiqueResultEventData;
+			const scoreStr = critData.score.toFixed(1);
+			const dims = critData.dimensions;
+			const dimStr = Object.entries(dims)
+				.map(([k, v]) => `${k}: ${v}`)
+				.join(" | ");
+			const issuesStr = critData.issues.length
+				? critData.issues.join("；")
+				: "无";
+			const sugStr = critData.suggestions.length
+				? critData.suggestions.join("；")
+				: "无";
+			const entityLabel =
+				critData.entity_type === "character" ? "角色" : "分镜";
+			const statusText = critData.will_regenerate
+				? "分数低于阈值，将重新生成"
+				: "质量达标";
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "critic",
+				role: "assistant",
+				content: `${entityLabel}审查结果：总分 ${scoreStr}/10\n${dimStr}\n问题: ${issuesStr}\n建议: ${sugStr}\n${statusText}`,
+				timestamp: new Date().toISOString(),
+			});
+			break;
+		}
+
+		case "version_created": {
+			const versionData = event.data as unknown as VersionCreatedEventData;
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "system",
+				role: "info",
+				content: `${versionData.entity_type === "character" ? "角色" : "分镜"} ${versionData.entity_id} 已保存版本 v${versionData.version}`,
+				timestamp: new Date().toISOString(),
+			});
+			break;
+		}
+
+		case "version_rollback": {
+			const rollbackData = event.data as unknown as VersionRollbackEventData;
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "system",
+				role: "info",
+				content: `${rollbackData.entity_type === "character" ? "角色" : "分镜"} ${rollbackData.entity_id} 已从 v${rollbackData.from_version} 回滚到 v${rollbackData.to_version}`,
+				timestamp: new Date().toISOString(),
+			});
+			break;
+		}
+
+		case "audio_generated": {
+			const audioData = event.data as unknown as AudioGeneratedEventData;
+			if (audioData.shot_id) {
+				const shot = store.shots.find((s) => s.id === audioData.shot_id);
+				if (shot) {
+					store.updateShot({
+						...shot,
+						tts_url: audioData.tts_url ?? shot.tts_url,
+						bgm_type: audioData.bgm_type ?? shot.bgm_type,
+					});
+				}
+			}
+			break;
+		}
+
+		case "export_completed": {
+			const exportData = event.data as unknown as import("~/types").ExportCompletedEventData;
+			const formatLabel = exportData.format === "pdf" ? "PDF 漫画册" : "Webtoon 长图";
+			if (exportData.status === "completed" && exportData.download_url) {
+				const url = getStaticUrl(exportData.download_url);
+				toast.success({
+					title: "导出完成",
+					message: `${formatLabel}已生成`,
+					duration: 8000,
+					actions: url
+						? [
+							{
+								label: "下载",
+								onClick: () => {
+									window.open(url, "_blank");
+								},
+								variant: "primary" as const,
+							},
+						  ]
+						: undefined,
+				});
+			} else if (exportData.status === "failed") {
+				toast.error({
+					title: "导出失败",
+					message: `${formatLabel}生成失败${exportData.error ? `: ${exportData.error}` : ""}`,
+					duration: 5000,
+				});
+			}
+			break;
+		}
+
+		case "bible_updated": {
+			const bibleData = event.data as unknown as import("~/types").BibleUpdatedEventData;
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "critic",
+				role: "info",
+				content: `角色圣经已更新${bibleData.has_embedding ? "（含人脸特征）" : ""}`,
+				timestamp: new Date().toISOString(),
+			});
+			break;
+		}
+
+		case "consistency_eval_completed": {
+			const evalData = event.data as unknown as import("~/types").ConsistencyEvalCompletedEventData;
+			store.addMessage({
+				id: generateMessageId(),
+				agent: "critic",
+				role: "info",
+				content: `一致性评估完成：综合评分 ${evalData.overall_score.toFixed(1)}/100，${evalData.character_count} 个角色已评估`,
+				timestamp: new Date().toISOString(),
+			});
 			break;
 		}
 

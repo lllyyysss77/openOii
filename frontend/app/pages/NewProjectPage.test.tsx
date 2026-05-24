@@ -21,6 +21,25 @@ vi.mock('~/services/api', () => ({
   projectsApi: {
     create: vi.fn(),
   },
+  styleTemplatesApi: {
+    list: vi.fn().mockResolvedValue([]),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+  universesApi: {
+    list: vi.fn().mockResolvedValue([]),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    addProject: vi.fn(),
+    removeProject: vi.fn(),
+    listSharedCharacters: vi.fn().mockResolvedValue([]),
+    promoteCharacter: vi.fn(),
+    importCharacter: vi.fn(),
+    syncCharacter: vi.fn(),
+  },
 }));
 
 vi.mock('~/utils/toast', () => ({
@@ -67,6 +86,7 @@ describe('NewProjectPage', () => {
       text_provider_override: null,
       image_provider_override: 'openai',
       video_provider_override: null,
+      universe_id: null,
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['projects'] });
     expect(mockNavigate).toHaveBeenCalledWith('/project/7?autoStart=true');

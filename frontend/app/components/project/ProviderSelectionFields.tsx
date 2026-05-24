@@ -23,8 +23,9 @@ export const TEXT_PROVIDER_OPTIONS = [
   "inherit-default",
   "anthropic",
   "openai",
+  "fake",
 ] as const;
-export const IMAGE_PROVIDER_OPTIONS = ["inherit-default", "openai"] as const;
+export const IMAGE_PROVIDER_OPTIONS = ["inherit-default", "openai", "fake"] as const;
 export const VIDEO_PROVIDER_OPTIONS = [
   "inherit-default",
   "openai",

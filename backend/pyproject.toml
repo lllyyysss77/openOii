@@ -27,6 +27,8 @@ dependencies = [
   "insightface>=0.7.3",
   "onnxruntime>=1.17.0",
   "opencv-python-headless>=4.8.0",
+  "edge-tts>=6.1.0",
+  "reportlab>=4.0",
 ]
 
 [dependency-groups]
@@ -41,6 +43,10 @@ dev = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+  "error::pytest.PytestUnraisableExceptionWarning",
+  "error:coroutine .* was never awaited:RuntimeWarning",
+]
 
 [tool.coverage.run]
 concurrency = ["thread", "greenlet"]

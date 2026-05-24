@@ -23,21 +23,27 @@ from app.schemas.project import (
 
 
 PHASE2_STAGE_ORDER: tuple[str, ...] = (
+    "plan_outline",
+    "outline_approval",
     "plan_characters",
     "characters_approval",
     "plan_shots",
     "shots_approval",
     "render_characters",
     "character_images_approval",
+    "critique_character_images",
     "render_shots",
     "shot_images_approval",
+    "critique_shot_images",
     "compose_videos",
     "compose_merge",
+    "add_audio",
     "compose_approval",
     "review",
 )
 
 AGENT_TO_STAGE: dict[str, str] = {
+    "outline": "plan_outline",
     "plan": "plan_characters",
     "render": "render_characters",
     "compose": "compose_videos",
@@ -119,6 +125,7 @@ def _normalize_stage_history(values: dict[str, Any]) -> list[str]:
 
 
 _APPROVAL_TO_PRODUCED_STAGE: dict[str, str] = {
+    "outline_approval": "plan_outline",
     "characters_approval": "plan_characters",
     "shots_approval": "plan_shots",
     "character_images_approval": "render_characters",
@@ -194,7 +201,7 @@ def _infer_current_stage(run: AgentRun, snapshots: Sequence[Any]) -> str:
     if mapped_stage is not None:
         return mapped_stage
 
-    return "plan_characters"
+    return "plan_outline"
 
 
 async def build_recovery_summary(

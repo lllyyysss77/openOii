@@ -52,7 +52,7 @@ def test_build_phase2_runtime_context_defaults():
     ctx = build_phase2_runtime_context(orchestrator="orch", agent_context="ac")
     assert ctx.orchestrator == "orch"
     assert ctx.agent_context == "ac"
-    assert ctx.start_stage == "plan"
+    assert ctx.start_stage == "plan_outline"
     assert ctx.auto_mode is False
 
 

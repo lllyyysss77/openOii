@@ -71,13 +71,16 @@ _ALLOWED_OVERRIDE_FIELDS = {
     "text_model",
     "text_endpoint",
     "text_provider",
+    "fake_text_response",
     "text_enable_thinking",
     # 图像生成
+    "image_provider",
     "image_api_key",
     "image_base_url",
     "image_model",
     "image_endpoint",
     "enable_image_to_image",
+    "fake_image_fixture_url",
     # 视频生成
     "video_api_key",
     "video_base_url",
@@ -229,10 +232,10 @@ async def _test_llm_connection(settings) -> TestConnectionResponse:
 async def _test_image_connection(settings) -> TestConnectionResponse:
     """测试图像生成服务连接（使用实际服务类）"""
     try:
-        from app.services.image import ImageService
+        from app.services.image_factory import create_image_service
 
         # 实例化服务
-        service = ImageService(settings, max_retries=0)
+        service = create_image_service(settings)
 
         # 尝试发送最小请求
         try:
@@ -240,7 +243,9 @@ async def _test_image_connection(settings) -> TestConnectionResponse:
             await service.generate(prompt="test", size="1024x1024", n=1)
             # 成功
             return TestConnectionResponse(
-                success=True, message="图像服务连接成功", details=f"模型: {settings.image_model}"
+                success=True,
+                message="图像服务连接成功",
+                details=f"提供商: {settings.image_provider}, 模型: {settings.image_model}",
             )
         except Exception as e:
             # 检查是否是认证错误

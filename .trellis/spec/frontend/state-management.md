@@ -79,7 +79,7 @@ Use the `persist` middleware (`zustand/middleware`) only when state must survive
 
 | Store | Purpose |
 |---|---|
-| `editorStore.ts` | Project editor session: selection, generation flags, recovery, characters, shots, current run, projectVideoUrl, projectStatus. The single biggest store; treat as the source of truth for the canvas page. |
+| `editorStore.ts` | Project editor session: selection, generation flags, recovery, characters, shots, current run, projectVideoUrl, projectStatus, projectStoryOutline, projectVisualBible, projectOutlineApproved. The single biggest store; treat as the source of truth for the canvas page. |
 | `settingsStore.ts` | Whether the settings modal is open. |
 | `sidebarStore.ts` | Sidebar collapse state. |
 | `themeStore.ts` | Theme name, persisted, syncs `data-theme`. |

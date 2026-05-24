@@ -19,8 +19,8 @@ class ProjectProviderOverrides(Protocol):
     video_provider_override: str | None
 
 
-TEXT_PROVIDER_KEYS = ("anthropic", "openai")
-IMAGE_PROVIDER_KEYS = ("openai",)
+TEXT_PROVIDER_KEYS = ("anthropic", "openai", "fake")
+IMAGE_PROVIDER_KEYS = ("openai", "fake")
 VIDEO_PROVIDER_KEYS = ("openai", "doubao", "fake")
 TEXT_PROBE_TTL_S = 300.0
 TEXT_PROBE_TIMEOUT_S = 60.0
@@ -61,7 +61,7 @@ def settings_with_provider_snapshot(
 ) -> Settings:
     """Use snapshot selection as source of truth for settings.
 
-    text_provider and video_provider are copied from snapshot.selected_key directly,
+    text_provider, image_provider, and video_provider are copied from snapshot.selected_key directly,
     without any fallback to current settings.
     """
     snapshot = _provider_snapshot_payload(provider_snapshot)
@@ -69,11 +69,16 @@ def settings_with_provider_snapshot(
         return settings.model_copy()
 
     text_key = None
+    image_key = None
     video_key = None
 
     text_entry = snapshot.get("text")
     if isinstance(text_entry, dict):
         text_key = text_entry.get("selected_key")
+
+    image_entry = snapshot.get("image")
+    if isinstance(image_entry, dict):
+        image_key = image_entry.get("selected_key")
 
     video_entry = snapshot.get("video")
     if isinstance(video_entry, dict):
@@ -81,6 +86,8 @@ def settings_with_provider_snapshot(
 
     if isinstance(text_key, str):
         settings = settings.model_copy(update={"text_provider": text_key})
+    if isinstance(image_key, str):
+        settings = settings.model_copy(update={"image_provider": image_key})
     if isinstance(video_key, str):
         settings = settings.model_copy(update={"video_provider": video_key})
 
@@ -104,6 +111,8 @@ def _text_credentials_available(provider_key: str | None, settings: Settings) ->
         return bool(settings.anthropic_api_key or settings.anthropic_auth_token)
     if provider_key == "openai":
         return bool(settings.text_api_key)
+    if provider_key == "fake":
+        return True
     return False
 
 
@@ -121,6 +130,10 @@ async def probe_text_provider(settings: Settings) -> TextProviderCapability:
         service = LLMService(probe_settings, max_retries=TEXT_PROBE_MAX_RETRIES)
     elif probe_settings.text_provider == "openai":
         service = TextService(probe_settings, max_retries=TEXT_PROBE_MAX_RETRIES)
+    elif probe_settings.text_provider == "fake":
+        from app.services.fake_text import FakeTextService
+
+        service = FakeTextService(probe_settings)
     else:
         result = TextProviderCapability(
             status="invalid",
@@ -243,15 +256,16 @@ def resolve_project_provider_settings(
         credential_ok={
             "anthropic": bool(settings.anthropic_api_key or settings.anthropic_auth_token),
             "openai": bool(settings.text_api_key),
+            "fake": True,
         },
         modality_label="文本",
         probe=text_probe,
     )
     image = _resolve_entry(
         override_key=project.image_provider_override,
-        default_key="openai",
+        default_key=settings.image_provider,
         supported_keys=IMAGE_PROVIDER_KEYS,
-        credential_ok={"openai": bool(settings.image_api_key)},
+        credential_ok={"openai": bool(settings.image_api_key), "fake": True},
         modality_label="图像",
     )
     video = _resolve_entry(

@@ -42,9 +42,9 @@ def test_thread_id_pending():
 
 
 def test_stage_index_valid():
-    assert _stage_index("plan_characters") == 0
-    assert _stage_index("render_characters") == 4
-    assert _stage_index("review") == 11
+    assert _stage_index("plan_outline") == 0
+    assert _stage_index("render_characters") == 6
+    assert _stage_index("review") == 16
 
 
 def test_stage_index_unknown_returns_zero():
@@ -63,7 +63,7 @@ def test_next_stage_valid():
 
 
 def test_next_stage_unknown_returns_first():
-    assert _next_stage("unknown") == "characters_approval"
+    assert _next_stage("unknown") == "outline_approval"
 
 
 def test_next_stage_last_stage_returns_none():
@@ -224,7 +224,7 @@ def test_infer_from_agent():
 
 
 def test_infer_default_plan():
-    assert _infer_current_stage(FakeRun(), []) == "plan_characters"
+    assert _infer_current_stage(FakeRun(), []) == "plan_outline"
 
 
 # --- AGENT_TO_STAGE mapping ---
@@ -238,8 +238,8 @@ def test_agent_to_stage_coverage():
 
 
 def test_phase2_stage_order_length():
-    assert len(PHASE2_STAGE_ORDER) == 12
-    assert PHASE2_STAGE_ORDER[0] == "plan_characters"
+    assert len(PHASE2_STAGE_ORDER) == 17
+    assert PHASE2_STAGE_ORDER[0] == "plan_outline"
     assert PHASE2_STAGE_ORDER[-1] == "review"
 
 

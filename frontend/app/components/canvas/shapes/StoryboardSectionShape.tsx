@@ -132,6 +132,14 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
 								<SvgIcon name="check" size={12} />
 							</button>
 						)}
+						<button
+							type="button"
+							className="btn btn-xs btn-circle btn-ghost text-info hover:bg-info/30"
+							title="版本历史"
+							onClick={() => handleAction("history")}
+						>
+							<SvgIcon name="clock-3" size={12} />
+						</button>
 					</div>
 				</figure>
 			) : (
@@ -207,6 +215,9 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
 						)}
 						{shot.dialogue && (
 							<p className="text-xs text-primary/80 italic">
+								{shot.tts_url && (
+									<SvgIcon name="volume-2" size={10} className="mr-0.5 inline" />
+								)}
 								"{shot.dialogue}"
 							</p>
 						)}
@@ -223,6 +234,12 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
 						<span className="badge badge-ghost badge-xs opacity-60 inline-flex items-center gap-0.5">
 							<SvgIcon name="volume-2" size={10} />
 							{shot.sfx}
+						</span>
+					)}
+					{shot.bgm_type && (
+						<span className="badge badge-info badge-xs opacity-70 inline-flex items-center gap-0.5">
+							<SvgIcon name="music" size={10} />
+							{shot.bgm_type}
 						</span>
 					)}
 				</div>

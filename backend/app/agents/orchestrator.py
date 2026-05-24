@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.utils import utcnow
 from app.agents.base import AgentContext
+from app.agents.outline import OutlineAgent
 from app.agents.plan import PlanAgent
 from app.agents.render import RenderAgent
 from app.agents.compose import ComposeAgent
@@ -29,7 +30,7 @@ from app.orchestration.runtime import (
 from app.orchestration.state import Phase2Stage, next_production_stage, workflow_progress_for_stage
 from app.services.creative_control import collect_project_blocking_clips
 from app.services.file_cleaner import delete_files
-from app.services.image import ImageService
+from app.services.image_factory import create_image_service
 from app.services.provider_resolution import settings_with_provider_snapshot
 from app.services.run_recovery import PHASE2_STAGE_ORDER, build_recovery_summary
 from app.services.text_factory import create_text_service
@@ -49,25 +50,32 @@ def _next_phase2_stage(stage: str | None) -> str | None:
 
 
 STAGE_AGENT_MAP = {
+    "plan_outline": "outline",
+    "outline_approval": "outline",
     "plan_characters": "plan",
     "characters_approval": "plan",
     "plan_shots": "plan",
     "shots_approval": "plan",
     "render_characters": "render",
     "character_images_approval": "render",
+    "critique_character_images": "critic",
     "render_shots": "render",
     "shot_images_approval": "render",
+    "critique_shot_images": "critic",
     "compose_videos": "compose",
     "compose_merge": "compose",
+    "add_audio": "compose",
     "compose_approval": "compose",
     "review": "review",
 }
 
 GRAPH_STAGE_FOR_AGENT = {
+    "outline": "plan_outline",
     "plan": "plan_characters",
     "render": "render_characters",
     "compose": "compose_videos",
     "review": "review",
+    "critic": "critique_character_images",
 }
 AGENT_STAGE_MAP = STAGE_AGENT_MAP
 RESUME_AGENT_FOR_STAGE = STAGE_AGENT_MAP
@@ -87,6 +95,12 @@ def _video_generation_skipped_in_result(result: Any) -> bool:
 
 # Agent 完成后的描述信息
 AGENT_COMPLETION_INFO = {
+    "outline": {
+        "completed": "已完成故事大纲",
+        "details": "生成了三幕结构和视觉方向",
+        "next": "确认后将进入角色设计",
+        "question": "故事大纲方向是否满意？",
+    },
     "plan": {
         "completed": "已完成创作方案规划",
         "details": "生成了角色设定和分镜脚本",
@@ -98,6 +112,12 @@ AGENT_COMPLETION_INFO = {
         "details": "角色形象和分镜画面均已渲染完成",
         "next": "接下来将根据分镜生成视频片段并合成",
         "question": "角色形象和分镜画面是否满意？如果需要重新生成，请告诉我。",
+    },
+    "critic": {
+        "completed": "已完成质量审查",
+        "details": "已对生成的图像进行一致性、质量和构图审查",
+        "next": "审查通过，继续下一步",
+        "question": "审查结果是否满意？",
     },
     "compose": {
         "completed": "已完成视频合成",
@@ -229,6 +249,7 @@ class GenerationOrchestrator:
         self.session = session
         self._last_user_feedback_id: int | None = None
         self.agents = [
+            OutlineAgent(),
             PlanAgent(),
             RenderAgent(),
             ComposeAgent(),
@@ -295,7 +316,15 @@ class GenerationOrchestrator:
         cleared_types: list[str] = []
 
         if mode == "incremental":
-            if start_agent in {"plan"}:
+            if start_agent in {"outline"}:
+                await self._clear_character_images(project_id)
+                await self._clear_shot_images(project_id)
+                await self._clear_shot_videos(project_id)
+                project = await self.session.get(Project, project_id)
+                if project is not None:
+                    project.outline_approved = False
+                    self.session.add(project)
+            elif start_agent in {"plan"}:
                 await self._clear_character_images(project_id)
                 await self._clear_shot_images(project_id)
                 await self._clear_shot_videos(project_id)
@@ -308,7 +337,17 @@ class GenerationOrchestrator:
             else:
                 raise ValueError(f"Unsupported start_agent for cleanup: {start_agent}")
         else:
-            if start_agent in {"plan"}:
+            if start_agent in {"outline"}:
+                await self._delete_project_shots(project_id)
+                await self._delete_project_characters(project_id)
+                project = await self.session.get(Project, project_id)
+                if project is not None:
+                    project.story_outline = {}
+                    project.visual_bible = None
+                    project.outline_approved = False
+                    self.session.add(project)
+                cleared_types = ["characters", "shots", "outline"]
+            elif start_agent in {"plan"}:
                 await self._delete_project_shots(project_id)
                 await self._delete_project_characters(project_id)
                 cleared_types = ["characters", "shots"]
@@ -468,6 +507,11 @@ class GenerationOrchestrator:
             "next_step": next_step,
             "question": question,
         }
+        if agent_name == "outline" and agent_ctx is not None:
+            outline = getattr(agent_ctx.project, "story_outline", None)
+            if isinstance(outline, dict):
+                awaiting_payload["story_outline"] = outline
+                awaiting_payload["visual_bible"] = getattr(agent_ctx.project, "visual_bible", None)
 
         # 缓存 payload 以便 WS 重连补发（事件本身可能在客户端未连接时丢失）
         await store_awaiting_payload(run_pk, awaiting_payload)
@@ -580,6 +624,12 @@ class GenerationOrchestrator:
                     "next_step": next_step,
                     "question": question,
                     "auto_mode": True,
+                    "story_outline": getattr(agent_ctx.project, "story_outline", None)
+                    if agent_name == "outline" and agent_ctx is not None
+                    else None,
+                    "visual_bible": getattr(agent_ctx.project, "visual_bible", None)
+                    if agent_name == "outline" and agent_ctx is not None
+                    else None,
                 },
             },
         )
@@ -628,7 +678,7 @@ class GenerationOrchestrator:
             project=project,
             run=run,
             llm=cast(Any, create_text_service(context_settings)),
-            image=ImageService(self.settings),
+            image=create_image_service(context_settings),
             video=cast(Any, create_video_service(context_settings)),
         )
 
@@ -770,6 +820,8 @@ class GenerationOrchestrator:
     ) -> tuple[bool, str]:
         if agent_name not in GRAPH_STAGE_FOR_AGENT:
             raise ValueError(f"Unsupported agent for graph execution: {agent_name}")
+        if agent_name == "outline" and not self.settings.outline_enabled:
+            agent_name = "plan"
 
         if agent_name == "review":
             latest_feedback = (ctx.user_feedback or request.notes or "").strip()
@@ -777,6 +829,9 @@ class GenerationOrchestrator:
                 ctx.user_feedback = latest_feedback
 
         start_stage = cast(Phase2Stage, GRAPH_STAGE_FOR_AGENT[agent_name])
+        if agent_name == "outline" and (not self.settings.outline_enabled or project.outline_approved):
+            start_stage = "plan_characters"
+            agent_name = "plan"
         if project.id is None or run.id is None:
             raise RuntimeError("Project and run must be persisted before graph execution")
         graph_config = cast(Any, build_graph_config(run))
@@ -926,16 +981,22 @@ class GenerationOrchestrator:
             return
 
         try:
+            if agent_name == "outline" and not self.settings.outline_enabled:
+                agent_name = "plan"
             self._agent_index(agent_name)
+
+            initial_stage = GRAPH_STAGE_FOR_AGENT[agent_name]
+            if agent_name == "outline" and project.outline_approved:
+                agent_name = "plan"
+                initial_stage = GRAPH_STAGE_FOR_AGENT[agent_name]
 
             await self._set_run(
                 run,
                 status="running",
                 current_agent=agent_name,
-                progress=workflow_progress_for_stage(GRAPH_STAGE_FOR_AGENT[agent_name]),
+                progress=workflow_progress_for_stage(initial_stage),
                 error=None,
             )
-            initial_stage = GRAPH_STAGE_FOR_AGENT[agent_name]
             await self.ws.send_event(
                 project_id,
                 {
@@ -1021,6 +1082,8 @@ class GenerationOrchestrator:
                 if not (isinstance(start_agent, str) and start_agent.strip()):
                     start_agent = "plan"
                 agent_name = start_agent.strip()
+                if agent_name == "outline" and not self.settings.outline_enabled:
+                    agent_name = "plan"
                 self._agent_index(agent_name)  # validate
                 ctx.rerun_mode = mode
                 await self._log(
@@ -1059,6 +1122,6 @@ class GenerationOrchestrator:
             project_id=project_id,
             run_id=run_id,
             request=request,
-            agent_name=self.agents[0].name,
+            agent_name="outline" if self.settings.outline_enabled else "plan",
             auto_mode=auto_mode,
         )

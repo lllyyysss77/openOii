@@ -7,7 +7,8 @@ from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 from sqlmodel import SQLModel
 
-from app.models import agent_run, artifact, asset, config_item, message, project, run, stage  # noqa: F401
+from app.models import agent_run, artifact, artifact_version, config_item, message, project, run, stage, style_template, consistency_report  # noqa: F401
+from app.models.universe import Universe, SharedCharacter, UniverseProjectLink  # noqa: F401
 
 
 def _backend_root() -> Path:
@@ -39,15 +40,21 @@ def test_alembic_upgrade_head_rebuilds_blank_database(tmp_path: Path) -> None:
         "agentrun",
         "agentmessage",
         "artifact",
+        "artifactversion",
         "asset",
         "character",
         "configitem",
+        "consistency_report",
         "message",
         "project",
         "run",
         "shot",
         "shot_character_binding",
         "stage",
+        "style_template",
+        "universe",
+        "sharedcharacter",
+        "universeprojectlink",
         "alembic_version",
     }
 
@@ -65,6 +72,9 @@ def test_alembic_upgrade_head_rebuilds_blank_database(tmp_path: Path) -> None:
         "text_provider_override",
         "image_provider_override",
         "video_provider_override",
+        "story_outline",
+        "visual_bible",
+        "outline_approved",
     }.issubset(project_columns)
 
 

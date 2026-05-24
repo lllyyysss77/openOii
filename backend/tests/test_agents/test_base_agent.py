@@ -10,6 +10,7 @@ from sqlmodel import SQLModel, select
 from starlette.websockets import WebSocketState
 
 from app.agents.base import BaseAgent
+from app.config import Settings
 from app.services.llm import LLMResponse
 from app.models import (  # noqa: F401
     agent_run,
@@ -281,3 +282,65 @@ async def test_call_llm_requires_final_response(monkeypatch, test_session, test_
 
     with pytest.raises(RuntimeError, match="without final response"):
         await DummyAgent().call_llm(ctx, system_prompt="sys", user_prompt="user")
+
+
+@pytest.mark.asyncio
+async def test_send_thinking_respects_enabled_flag(test_session, test_settings):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    ctx = await make_context(test_session, test_settings, project=project, run=run)
+    agent = DummyAgent()
+
+    # Default: thinking_chain_enabled=True, detail_level=normal (decision + reviewing visible)
+    initial_event_count = len(ctx.ws.events)
+    await agent.send_thinking(ctx, phase="decision", content="test thinking")
+    assert len(ctx.ws.events) > initial_event_count
+    # Should send both agent_thinking and run_message events
+    event_types = [e[1]["type"] for e in ctx.ws.events]
+    assert "agent_thinking" in event_types
+    assert "run_message" in event_types
+
+    # planning phase should be filtered at normal level
+    count_after_decision = len(ctx.ws.events)
+    await agent.send_thinking(ctx, phase="planning", content="should be filtered")
+    assert len(ctx.ws.events) == count_after_decision
+
+
+@pytest.mark.asyncio
+async def test_send_thinking_skips_when_disabled(test_session, test_settings):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    # Disable thinking chain
+    test_settings_thinking_off = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        thinking_chain_enabled=False,
+    )
+    ctx = await make_context(test_session, test_settings_thinking_off, project=project, run=run)
+    agent = DummyAgent()
+
+    initial_event_count = len(ctx.ws.events)
+    await agent.send_thinking(ctx, phase="planning", content="should not appear")
+    assert len(ctx.ws.events) == initial_event_count
+
+
+@pytest.mark.asyncio
+async def test_send_thinking_filters_by_detail_level(test_session, test_settings):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    # minimal level: only decision phase should pass
+    test_settings_minimal = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        thinking_chain_enabled=True,
+        thinking_chain_detail_level="minimal",
+    )
+    ctx = await make_context(test_session, test_settings_minimal, project=project, run=run)
+    agent = DummyAgent()
+
+    # reasoning phase should be filtered out at minimal level
+    initial_count = len(ctx.ws.events)
+    await agent.send_thinking(ctx, phase="reasoning", content="should be filtered")
+    assert len(ctx.ws.events) == initial_count
+
+    # decision phase should pass at minimal level
+    await agent.send_thinking(ctx, phase="decision", content="should appear")
+    assert len(ctx.ws.events) > initial_count

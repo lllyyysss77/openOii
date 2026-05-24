@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import cast
 
 from sqlalchemy import select
@@ -9,10 +10,13 @@ from app.agents.base import AgentContext, BaseAgent, CompletionInfo
 from app.agents.utils import build_character_context
 from app.models.project import Character, Shot
 from app.orchestration.state import workflow_progress_for_stage
+from app.services.audio_service import AudioService
 from app.services.creative_control import collect_project_blocking_clips
 from app.services.doubao_video import DoubaoVideoService
 from app.services.image_composer import ImageComposer
 from app.services.shot_binding import resolve_shot_bound_approved_characters
+
+logger = logging.getLogger(__name__)
 
 
 class ComposeAgent(BaseAgent):
@@ -59,6 +63,15 @@ class ComposeAgent(BaseAgent):
         total = len(shots)
         updated_count = 0
         mode_desc = "图生视频" if use_image_mode else "文生视频"
+
+        # Thinking: planning phase — starting video generation
+        await self.send_thinking(
+            ctx,
+            phase="planning",
+            content=f"准备为 {total} 个分镜生成视频，模式：{mode_desc}",
+            details=f"视频服务商：{'豆包' if is_doubao else 'OpenAI 兼容'}",
+        )
+
         await self.send_message(
             ctx, f"开始为 {total} 个分镜生成视频（{mode_desc}）...", progress=0.0, is_loading=True
         )
@@ -87,6 +100,14 @@ class ComposeAgent(BaseAgent):
                 )
                 characters = await resolve_shot_bound_approved_characters(ctx.session, shot)
                 video_prompt = self._build_video_prompt(shot, characters, style=ctx.project.style)
+
+                # Thinking: reasoning for each video
+                await self.send_thinking(
+                    ctx,
+                    phase="reasoning",
+                    content=f"分镜 #{shot.order} 视频提示词：{video_prompt[:80]}...",
+                )
+
                 duration = self._get_duration(shot, default_duration)
 
                 if is_doubao:
@@ -258,6 +279,167 @@ class ComposeAgent(BaseAgent):
         except Exception as e:
             await self.send_message(ctx, f"视频拼接失败: {e}。您可以稍后手动拼接。", progress=1.0)
 
+    async def _add_audio_to_videos(self, ctx: AgentContext) -> None:
+        """为分镜视频添加 TTS 配音 + BGM 背景音乐
+
+        容错设计：
+        - TTS 失败时跳过，仅加 BGM
+        - BGM 失败时跳过
+        - 整个阶段失败不阻塞主流程
+        """
+        settings = ctx.settings
+        tts_enabled = settings.tts_enabled
+        bgm_enabled = settings.bgm_enabled
+
+        if not tts_enabled and not bgm_enabled:
+            await self.send_message(ctx, "TTS 和 BGM 均未启用，跳过音频阶段。")
+            return
+
+        audio_service = AudioService(settings)
+
+        # 获取所有有视频的分镜
+        shot_project_id_col = cast(InstrumentedAttribute[int], cast(object, Shot.project_id))
+        shot_video_url_col = cast(InstrumentedAttribute[str | None], cast(object, Shot.video_url))
+        shot_order_col = cast(InstrumentedAttribute[int], cast(object, Shot.order))
+        res = await ctx.session.execute(
+            select(Shot)
+            .where(shot_project_id_col == ctx.project.id, shot_video_url_col.is_not(None))
+            .order_by(shot_order_col.asc())
+        )
+        shots = list(res.scalars().all())
+
+        # 获取项目角色列表（用于 TTS 语音选择）
+        characters = await self.get_project_characters(ctx)
+
+        total = len(shots)
+        audio_count = 0
+
+        await self.send_message(
+            ctx,
+            f"开始添加音频：TTS={'开启' if tts_enabled else '关闭'}，BGM={'开启' if bgm_enabled else '关闭'}...",
+            progress=0.0,
+            is_loading=True,
+        )
+
+        for i, shot in enumerate(shots):
+            try:
+                await self.send_progress_batch(
+                    ctx, total=total, current=i,
+                    message=f"   正在处理音频 {i + 1}/{total}...",
+                )
+
+                tts_url: str | None = None
+                bgm_type: str | None = None
+                bgm_path: str | None = None
+
+                # 1. 生成 TTS（如果有对白）
+                if tts_enabled and shot.dialogue:
+                    # 从 character_ids 找角色名
+                    character_name = ""
+                    if shot.character_ids:
+                        for char in characters:
+                            if char.id in shot.character_ids:
+                                character_name = char.name
+                                break
+
+                    tts_url = await audio_service.generate_character_tts(
+                        dialogue=shot.dialogue,
+                        character_name=character_name,
+                        characters=characters,
+                    )
+                    if tts_url:
+                        shot.tts_url = tts_url
+
+                # 2. 匹配 BGM
+                if bgm_enabled:
+                    bgm_path = audio_service.match_bgm(
+                        scene=shot.scene,
+                        expression=shot.expression,
+                    )
+                    if bgm_path:
+                        # 提取 BGM 类型名称
+                        bgm_type = bgm_path.rsplit("/", 1)[-1].replace(".mp3", "")
+                        shot.bgm_type = bgm_type
+
+                # 3. 混入视频（如果有 TTS 或 BGM）
+                if tts_url or bgm_path:
+                    new_video_url = await audio_service.mix_audio_into_video(
+                        video_path=shot.video_url,
+                        tts_path=tts_url,
+                        bgm_path=bgm_path,
+                    )
+                    if new_video_url != shot.video_url:
+                        shot.video_url = new_video_url
+                        audio_count += 1
+
+                # 更新分镜
+                ctx.session.add(shot)
+                await ctx.session.flush()
+
+                # 发送音频生成事件
+                await ctx.ws.send_event(
+                    ctx.project.id,
+                    {
+                        "type": "audio_generated",
+                        "data": {
+                            "shot_id": shot.id,
+                            "tts_url": shot.tts_url,
+                            "bgm_type": shot.bgm_type,
+                            "duration": shot.duration,
+                        },
+                    },
+                )
+
+            except Exception as e:
+                logger.warning("Audio processing failed for shot %s: %s", shot.id, e)
+                await self.send_message(
+                    ctx, f"分镜 {shot.order} 音频处理失败: {e}，跳过。"
+                )
+
+        # 4. 为最终合并视频匹配 BGM
+        if bgm_enabled and ctx.project.video_url:
+            try:
+                # 使用所有分镜的场景信息综合匹配
+                scenes = [s.scene for s in shots if s.scene]
+                expressions = [s.expression for s in shots if s.expression]
+                combined = " ".join(scenes + expressions)
+                final_bgm_path = audio_service.match_bgm(
+                    scene=combined if combined else None,
+                    expression=None,
+                    genre=ctx.project.style,
+                )
+                if final_bgm_path:
+                    new_project_url = await audio_service.mix_bgm_into_video(
+                        video_path=ctx.project.video_url,
+                        bgm_path=final_bgm_path,
+                    )
+                    if new_project_url != ctx.project.video_url:
+                        ctx.project.video_url = new_project_url
+                        ctx.session.add(ctx.project)
+            except Exception as e:
+                logger.warning("Final video BGM mixing failed: %s", e)
+
+        await ctx.session.commit()
+
+        if audio_count > 0:
+            ctx.completion_info = CompletionInfo(
+                completed=f"已为 {audio_count} 个分镜添加音频",
+                next="音频处理完成，请查看最终效果",
+                question="配音和背景音乐效果如何？",
+            )
+        else:
+            ctx.completion_info = CompletionInfo(
+                completed="音频阶段完成",
+                next="",
+                question="",
+            )
+
+        await self.send_message(
+            ctx,
+            f"音频处理完成！为 {audio_count} 个分镜添加了音频。",
+            progress=1.0,
+        )
+
     async def run_videos(self, ctx: AgentContext) -> int:
         """Generate shot videos only (sub-step 1)."""
         await self.send_message(ctx, "开始生成分镜视频...", progress=0.0, is_loading=True)
@@ -279,6 +461,10 @@ class ComposeAgent(BaseAgent):
     async def run_merge(self, ctx: AgentContext) -> None:
         """Merge shot videos into final video (sub-step 2)."""
         await self._merge_videos(ctx)
+
+    async def run_add_audio(self, ctx: AgentContext) -> None:
+        """Add TTS dubbing and BGM to shot videos and final merged video (sub-step 3)."""
+        await self._add_audio_to_videos(ctx)
 
     async def run(self, ctx: AgentContext) -> None:
         """Legacy entry point — runs both sub-steps sequentially."""

@@ -22,6 +22,10 @@ target-version = "py310"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+  "error::pytest.PytestUnraisableExceptionWarning",
+  "error:coroutine .* was never awaited:RuntimeWarning",
+]
 ```
 
 ---
@@ -34,6 +38,11 @@ Before declaring backend work done, run from `backend/`:
 uv run ruff check app tests
 uv run pytest
 ```
+
+Pytest is configured to fail on unraisable coroutine warnings and unawaited
+coroutines. Treat these as real test failures, not harmless noise: they usually
+mean a fixture leaked an async connection, hit a real global engine, or created a
+coroutine without awaiting/closing it.
 
 For a focused test run during iteration:
 
@@ -119,6 +128,40 @@ Use `SettingsDep` (from `app.api.deps`) inside routes. Inside `get_settings()`-a
   ```
 
 - For async work, prefer `pytest_asyncio.fixture` over manual event-loop juggling. `asyncio_mode = "auto"` means test functions can be `async def` directly without `@pytest.mark.asyncio`.
+
+### Cross-layer API contract tests
+
+When a backend Pydantic schema is mirrored by a frontend DTO, add an executable
+contract test instead of relying on manual review. Current examples:
+
+- `backend/tests/test_schemas/test_project_contract.py` verifies
+  `ProjectUpdate.model_fields` matches `frontend/app/types/index.ts`
+  `UpdateProjectPayload` plus `ProjectProviderOverridesPayload`.
+- `backend/tests/test_schemas/test_ws_events.py` verifies backend and frontend
+  WebSocket event type unions stay identical.
+
+If a backend schema intentionally has fields the frontend cannot send, document
+that exception in the test with an explicit allowlist and reason.
+
+### Parent-scoped resource ownership
+
+Routes with parent ids in the path must verify child-resource ownership, even
+when the child id looks unguessable.
+
+```python
+@router.get("/{project_id}/export/{export_id}/status")
+async def get_export_status(project_id: int, export_id: str):
+    export_resp = await _get_export_status(export_id)
+    if not export_resp or export_resp.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Export task not found")
+    return export_resp
+```
+
+For async/cache-backed workflows, include the parent id in the cached response
+schema. `ExportResponse.project_id` is required so the status endpoint can
+validate `/projects/{project_id}/...` instead of trusting `export_id` alone.
+Add a regression test that the owning parent returns 200 and a different parent
+returns 404.
 
 ---
 
@@ -210,6 +253,83 @@ class FakeSession:
 ```
 
 This is needed for orchestrator tests where `_wait_for_confirm` queries `AgentMessage` after the main `Project`/`AgentRun` lookups.
+
+### 6. Provider resolution probe cache causes test interference
+
+`probe_text_provider()` caches results by `provider + base_url + model + endpoint`. When multiple tests use the same settings, the second test returns the cached result **without calling TextService**, so monkeypatched DummyTextService constructors are never invoked.
+
+**Fix**: Use different `text_base_url` / `text_model` values for each test, or clear the cache between tests.
+
+```python
+# Wrong — same URL/model as previous test, cache hit
+settings = Settings(text_base_url="https://text.example.com", text_model="gpt-test", ...)
+
+# Correct — unique URL to avoid cache collision
+settings = Settings(text_base_url="https://slow-proxy.example.com", text_model="gpt-slow-test", ...)
+```
+
+### 7. Don't call autouse fixtures directly
+
+When a fixture is defined with `@pytest.fixture(autouse=True)`, it runs automatically for every test in the module. Calling it directly (e.g., `_stub_async_provider_resolution(monkeypatch)`) raises `FixtureCalledDirectlyError`.
+
+```python
+# Wrong — calling autouse fixture directly
+@pytest.mark.asyncio
+async def test_something(async_client, monkeypatch):
+    _stub_async_provider_resolution(monkeypatch)  # FixtureCalledDirectlyError
+
+# Correct — rely on autouse, or make it a non-autouse fixture and inject it
+@pytest.mark.asyncio
+async def test_something(async_client):
+    # autouse fixture already applied
+```
+
+### 8. Mock stores must include all new methods
+
+When mocking Zustand stores in frontend tests, the mock object must include **every method** the component under test calls. Missing methods cause `TypeError: store.method is not a function` at render time.
+
+```typescript
+// Wrong — missing setProjectStoryOutline
+const storeState = {
+  setRunMode: vi.fn(),
+};
+
+// Correct — include all new editorStore methods
+const storeState = {
+  setRunMode: vi.fn(),
+  setProjectStoryOutline: vi.fn(),
+  setProjectVisualBible: vi.fn(),
+  setProjectOutlineApproved: vi.fn(),
+};
+```
+
+This commonly happens after feature additions add new store methods — the test mock must be updated to match.
+
+### 9. Isolate global async DB engine in `init_db()` tests
+
+`app.db.session.init_db()` owns the real module-level `engine`. Tests that
+exercise fallback paths must not accidentally call the real global engine after
+patching only `async_session_maker`; that can produce unraisable async cleanup
+warnings such as `coroutine Connection._cancel was never awaited`.
+
+Patch the full init surface when the test is about init logic rather than the
+database driver:
+
+```python
+with patch("app.db.session.get_settings", return_value=test_settings), \
+     patch("app.db.session._run_alembic_upgrade"), \
+     patch("app.db.session.engine", _NoopEngine()), \
+     patch("app.db.session._sync_missing_metadata_columns"), \
+     patch("app.db.session.async_session_maker", _mock_session_maker(test_session)), \
+     patch("app.db.session.ensure_postgres_checkpointer_setup"):
+    await init_db()
+```
+
+If a warning appears only in full-suite runs, rerun with:
+
+```bash
+uv run pytest -q -W error::RuntimeWarning -W error::pytest.PytestUnraisableExceptionWarning
+```
 
 ---
 

@@ -8,7 +8,7 @@ const toastMock = vi.hoisted(() => ({
 }));
 
 vi.mock("~/utils/toast", () => ({ toast: toastMock }));
-vi.mock("~/utils/runtimeBase", () => ({ getWsBase: () => "ws://example.test" }));
+vi.mock("~/utils/runtimeBase", () => ({ getWsBase: () => "ws://example.test", getApiBase: () => "http://example.test" }));
 
 import { useEditorStore } from "~/stores/editorStore";
 import { applyWsEvent, useProjectWebSocket } from "~/hooks/useWebSocket";
@@ -1058,6 +1058,64 @@ describe("useProjectWebSocket", () => {
     expect(useEditorStore.getState().projectStatus).toBe("generating");
   });
 
+  it("handles full project_updated contract fields", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+
+    applyWsEvent(
+      {
+        type: "project_updated",
+        data: {
+          project: {
+            id: 9,
+            creation_mode: "universe",
+            exports: ["/static/exports/story.pdf"],
+            provider_settings: {
+              text: {
+                selected_key: "fake",
+                source: "project",
+                resolved_key: "fake",
+                valid: true,
+                reason_code: null,
+                reason_message: null,
+              },
+              image: {
+                selected_key: "fake",
+                source: "project",
+                resolved_key: "fake",
+                valid: true,
+                reason_code: null,
+                reason_message: null,
+              },
+              video: {
+                selected_key: "fake",
+                source: "project",
+                resolved_key: "fake",
+                valid: true,
+                reason_code: null,
+                reason_message: null,
+              },
+            },
+            universe_id: 3,
+            chapter_number: 4,
+            chapter_title: "第四章",
+          },
+        },
+      } as never,
+      store,
+      noopAutoConfirm
+    );
+
+    expect(useEditorStore.getState()).toMatchObject({
+      projectCreationMode: "universe",
+      projectExports: ["/static/exports/story.pdf"],
+      projectUniverseId: 3,
+      projectChapterNumber: 4,
+      projectChapterTitle: "第四章",
+    });
+    expect(useEditorStore.getState().projectProviderSettings?.text.selected_key).toBe("fake");
+  });
+
   it("ignores project_updated status when project data is undefined", () => {
     const store = useEditorStore.getState();
     store.reset();
@@ -1209,5 +1267,200 @@ describe("useProjectWebSocket", () => {
     );
 
     expect(useEditorStore.getState().currentStage).toBe("plan");
+  });
+
+  it("handles extended WS event contracts added after the base generation flow", () => {
+    const store = useEditorStore.getState();
+    store.reset();
+    store.setShots([
+      {
+        id: 7,
+        project_id: 1,
+        order: 1,
+        description: "shot",
+        prompt: null,
+        image_prompt: null,
+        image_url: null,
+        video_url: null,
+        duration: null,
+        camera: null,
+        motion_note: null,
+        scene: null,
+        action: null,
+        expression: null,
+        lighting: null,
+        dialogue: null,
+        sfx: null,
+        seed: null,
+        character_ids: [],
+        approval_state: "draft",
+        approval_version: 0,
+        approved_at: null,
+        approved_description: null,
+        approved_prompt: null,
+        approved_image_prompt: null,
+        approved_duration: null,
+        approved_camera: null,
+        approved_motion_note: null,
+        approved_scene: null,
+        approved_action: null,
+        approved_expression: null,
+        approved_lighting: null,
+        approved_dialogue: null,
+        approved_sfx: null,
+        approved_character_ids: [],
+      },
+    ]);
+
+    applyWsEvent(
+      {
+        type: "agent_thinking",
+        data: {
+          agent: "critic",
+          phase: "reviewing",
+          content: "checking consistency",
+          details: "face match",
+        },
+      } as never,
+      useEditorStore.getState(),
+      noopAutoConfirm
+    );
+    applyWsEvent(
+      {
+        type: "critique_result",
+        data: {
+          score: 8.6,
+          dimensions: { quality: 9 },
+          issues: [],
+          suggestions: ["保持当前风格"],
+          entity_type: "shot",
+          entity_id: 7,
+          will_regenerate: false,
+        },
+      } as never,
+      useEditorStore.getState(),
+      noopAutoConfirm
+    );
+    applyWsEvent(
+      {
+        type: "version_created",
+        data: {
+          entity_type: "shot",
+          entity_id: 7,
+          version: 2,
+          trigger: "generation",
+        },
+      } as never,
+      useEditorStore.getState(),
+      noopAutoConfirm
+    );
+    applyWsEvent(
+      {
+        type: "version_rollback",
+        data: {
+          entity_type: "shot",
+          entity_id: 7,
+          from_version: 3,
+          to_version: 2,
+        },
+      } as never,
+      useEditorStore.getState(),
+      noopAutoConfirm
+    );
+    applyWsEvent(
+      {
+        type: "audio_generated",
+        data: {
+          shot_id: 7,
+          tts_url: "/static/audio/shot7.mp3",
+          bgm_type: "warm",
+          duration: 4.2,
+        },
+      } as never,
+      useEditorStore.getState(),
+      noopAutoConfirm
+    );
+    applyWsEvent(
+      {
+        type: "bible_updated",
+        data: {
+          character_id: 1,
+          visual_notes: true,
+          reference_images_count: 2,
+          has_embedding: true,
+        },
+      } as never,
+      useEditorStore.getState(),
+      noopAutoConfirm
+    );
+    applyWsEvent(
+      {
+        type: "consistency_eval_completed",
+        data: {
+          project_id: 1,
+          overall_score: 91.25,
+          character_count: 3,
+        },
+      } as never,
+      useEditorStore.getState(),
+      noopAutoConfirm
+    );
+    applyWsEvent(
+      {
+        type: "export_completed",
+        data: {
+          export_id: "exp-1",
+          format: "pdf",
+          download_url: "/static/exports/story.pdf",
+          status: "completed",
+          error: null,
+        },
+      } as never,
+      useEditorStore.getState(),
+      noopAutoConfirm
+    );
+
+    const messages = useEditorStore.getState().messages;
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          agent: "critic",
+          role: "thinking",
+          phase: "reviewing",
+          content: "checking consistency",
+        }),
+        expect.objectContaining({
+          agent: "critic",
+          role: "assistant",
+          content: expect.stringContaining("总分 8.6/10"),
+        }),
+        expect.objectContaining({
+          agent: "system",
+          content: expect.stringContaining("已保存版本 v2"),
+        }),
+        expect.objectContaining({
+          agent: "system",
+          content: expect.stringContaining("已从 v3 回滚到 v2"),
+        }),
+        expect.objectContaining({
+          agent: "critic",
+          content: expect.stringContaining("角色圣经已更新"),
+        }),
+        expect.objectContaining({
+          agent: "critic",
+          content: expect.stringContaining("综合评分 91.3/100"),
+        }),
+      ])
+    );
+    expect(useEditorStore.getState().shots[0]).toMatchObject({
+      tts_url: "/static/audio/shot7.mp3",
+      bgm_type: "warm",
+    });
+    expect(toastMock.success).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "导出完成",
+        message: "PDF 漫画册已生成",
+      })
+    );
   });
 });

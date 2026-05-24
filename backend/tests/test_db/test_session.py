@@ -30,6 +30,10 @@ async def test_init_db_runs_schema_check_and_config(monkeypatch):
         async def apply_settings_overrides(self):
             calls["apply_overrides"] = True
 
+    class FakeResult:
+        def scalar_one_or_none(self):
+            return None  # No existing templates
+
     class FakeSessionCtx:
         async def __aenter__(self):
             return self
@@ -38,10 +42,13 @@ async def test_init_db_runs_schema_check_and_config(monkeypatch):
             return False
 
         async def execute(self, *args, **kwargs):
-            return None
+            return FakeResult()
 
         async def commit(self):
             return None
+
+        def add(self, obj):
+            pass
 
     monkeypatch.setattr(session_module, "async_session_maker", lambda: FakeSessionCtx())
     monkeypatch.setattr(session_module, "get_settings", lambda: SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:"))

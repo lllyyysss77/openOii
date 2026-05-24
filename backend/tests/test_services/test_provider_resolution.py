@@ -134,6 +134,24 @@ def test_resolver_accepts_fake_video_without_credentials() -> None:
     assert result.valid is True
 
 
+def test_resolver_accepts_fake_text_and_image_without_credentials() -> None:
+    settings = Settings(
+        text_provider="fake",
+        image_provider="fake",
+        video_provider="fake",
+    )
+
+    result = resolve_project_provider_settings(make_project(), settings)
+
+    assert result.valid is True
+    assert result.text.selected_key == "fake"
+    assert result.text.valid is True
+    assert result.image.selected_key == "fake"
+    assert result.image.valid is True
+    assert result.video.selected_key == "fake"
+    assert result.video.valid is True
+
+
 def test_resolver_is_deterministic_for_same_inputs() -> None:
     settings = Settings(
         text_provider="openai",
@@ -237,8 +255,8 @@ async def test_probe_text_provider_allows_slow_proxy_probe(monkeypatch) -> None:
     settings = Settings(
         text_provider="openai",
         text_api_key="text-key",
-        text_base_url="https://text.example.com",
-        text_model="gpt-test",
+        text_base_url="https://slow-proxy.example.com",
+        text_model="gpt-slow-test",
         text_endpoint="/chat/completions",
         request_timeout_s=120,
     )

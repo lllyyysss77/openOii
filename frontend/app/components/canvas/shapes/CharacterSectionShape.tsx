@@ -9,6 +9,7 @@ import {
 import type { CharacterSectionShape, ReviewedCharacter } from "./types";
 import { SectionShell } from "./SectionShell";
 import { getStaticUrl } from "~/services/api";
+import { charactersApi } from "~/services/api";
 import {
 	getWorkspaceSectionPlaceholderText,
 	getWorkspaceSectionStatusLabel,
@@ -17,6 +18,7 @@ import { canvasEvents } from "../canvasEvents";
 import type { ShapeActionName } from "../canvasEvents";
 import { SvgIcon } from "~/components/ui/SvgIcon";
 import { useDomSize, getShapeSize } from "~/hooks/useDomSize";
+import { useState, useCallback } from "react";
 
 function CharacterCard({ char }: { char: ReviewedCharacter }) {
 	const isApproved = char.approval_state === "approved";
@@ -24,6 +26,8 @@ function CharacterCard({ char }: { char: ReviewedCharacter }) {
 	const approvedImage = getStaticUrl(char.approved_image_url);
 	const displayImage =
 		isApproved && approvedImage ? approvedImage : currentImage;
+
+	const [showBible, setShowBible] = useState(false);
 
 	const handleAction = (action: ShapeActionName) => {
 		if (
@@ -84,6 +88,14 @@ function CharacterCard({ char }: { char: ReviewedCharacter }) {
 						)}
 						<button
 							type="button"
+							className="btn btn-xs btn-circle btn-ghost text-info hover:bg-info/30"
+							title="版本历史"
+							onClick={() => handleAction("history")}
+						>
+							<SvgIcon name="clock-3" size={12} />
+						</button>
+						<button
+							type="button"
 							className="btn btn-xs btn-circle btn-ghost text-primary hover:bg-primary/30"
 							title="添加到资产库"
 							onClick={() => handleAction("add-to-assets")}
@@ -106,7 +118,208 @@ function CharacterCard({ char }: { char: ReviewedCharacter }) {
 				{char.description && (
 					<p className="text-xs text-base-content/50">{char.description}</p>
 				)}
+				<div className="flex items-center gap-1 mt-1">
+					{/* Bible button */}
+					<button
+						type="button"
+						className={`btn btn-xs btn-ghost gap-0.5 ${
+							showBible ? "btn-active" : ""
+						}`}
+						onClick={() => setShowBible(!showBible)}
+						title="角色圣经"
+					>
+						<SvgIcon name="book-open" size={12} />
+						<span className="text-[10px]">圣经</span>
+					</button>
+					{/* Embedding indicator */}
+					{char.has_embedding && (
+						<span
+							className="badge badge-primary badge-xs inline-flex items-center gap-0.5"
+							title="人脸嵌入已计算"
+						>
+							人脸
+							<SvgIcon name="check" size={10} />
+						</span>
+					)}
+				</div>
+				{/* Bible Panel */}
+				{showBible && (
+					<BiblePanel
+						characterId={char.id}
+						initialVisualNotes={char.visual_notes ?? null}
+						initialReferenceImages={char.reference_images || []}
+						initialHasEmbedding={char.has_embedding ?? false}
+						onClose={() => setShowBible(false)}
+					/>
+				)}
 			</div>
+		</div>
+	);
+}
+
+function BiblePanel({
+	characterId,
+	initialVisualNotes,
+	initialReferenceImages,
+	initialHasEmbedding,
+	onClose,
+}: {
+	characterId: number;
+	initialVisualNotes: string | null;
+	initialReferenceImages: string[];
+	initialHasEmbedding: boolean;
+	onClose: () => void;
+}) {
+	const [visualNotes, setVisualNotes] = useState(initialVisualNotes || "");
+	const [referenceImages, setReferenceImages] = useState<string[]>(initialReferenceImages);
+	const [hasEmbedding, setHasEmbedding] = useState(initialHasEmbedding);
+	const [saving, setSaving] = useState(false);
+	const [computing, setComputing] = useState(false);
+	const [newImageUrl, setNewImageUrl] = useState("");
+
+	const saveVisualNotes = useCallback(async () => {
+		setSaving(true);
+		try {
+			await charactersApi.updateBible(characterId, { visual_notes: visualNotes || null });
+		} catch (e) {
+			console.error("Failed to save visual notes", e);
+		} finally {
+			setSaving(false);
+		}
+	}, [characterId, visualNotes]);
+
+	const addImage = useCallback(async () => {
+		if (!newImageUrl.trim()) return;
+		setSaving(true);
+		try {
+			const result = await charactersApi.addReferenceImage(
+				characterId,
+				newImageUrl.trim(),
+			);
+			setReferenceImages(result.reference_images);
+			setNewImageUrl("");
+		} catch (e) {
+			console.error("Failed to add reference image", e);
+		} finally {
+			setSaving(false);
+		}
+	}, [characterId, newImageUrl]);
+
+	const removeImage = useCallback(
+		async (index: number) => {
+			setSaving(true);
+			try {
+				await charactersApi.deleteReferenceImage(characterId, index);
+				setReferenceImages((prev) => prev.filter((_, i) => i !== index));
+			} catch (e) {
+				console.error("Failed to delete reference image", e);
+			} finally {
+				setSaving(false);
+			}
+		},
+		[characterId],
+	);
+
+	const computeEmbedding = useCallback(async () => {
+		setComputing(true);
+		try {
+			await charactersApi.computeEmbedding(characterId);
+			setHasEmbedding(true);
+		} catch (e) {
+			console.error("Failed to compute embedding", e);
+		} finally {
+			setComputing(false);
+		}
+	}, [characterId]);
+
+	return (
+		<div className="mt-2 p-2 bg-base-300 rounded-lg text-xs space-y-2">
+			<div className="flex items-center justify-between">
+				<span className="font-semibold text-[11px]">角色圣经</span>
+				<button
+					type="button"
+					className="btn btn-xs btn-ghost btn-circle"
+					onClick={onClose}
+				>
+					<SvgIcon name="x" size={12} />
+				</button>
+			</div>
+
+			{/* Visual Notes */}
+			<div>
+				<label className="label text-[10px]">
+					视觉特征 (发色、瞳色、体型、标志配饰等)
+				</label>
+				<textarea
+					className="textarea textarea-bordered textarea-xs w-full h-16"
+					value={visualNotes}
+					onChange={(e) => setVisualNotes(e.target.value)}
+					onBlur={saveVisualNotes}
+					placeholder="描述角色的关键视觉特征..."
+				/>
+			</div>
+
+			{/* Reference Images */}
+			<div>
+				<label className="label text-[10px]">参考图</label>
+				{referenceImages.length > 0 && (
+					<div className="grid grid-cols-3 gap-1 mb-1">
+						{referenceImages.map((url, idx) => (
+							<div key={idx} className="relative group">
+								<img
+									src={getStaticUrl(url) ?? undefined}
+									alt={`参考图 ${idx + 1}`}
+									className="w-full h-16 object-cover rounded"
+								/>
+								<button
+									type="button"
+									className="btn btn-xs btn-circle btn-ghost absolute top-0 right-0 opacity-0 group-hover:opacity-100 text-error"
+									onClick={() => removeImage(idx)}
+								>
+									<SvgIcon name="x" size={12} />
+								</button>
+							</div>
+						))}
+					</div>
+				)}
+				<div className="flex gap-1">
+					<input
+						type="text"
+						className="input input-bordered input-xs flex-1"
+						placeholder="图片 URL"
+						value={newImageUrl}
+						onChange={(e) => setNewImageUrl(e.target.value)}
+						onKeyDown={(e) => e.key === "Enter" && addImage()}
+					/>
+					<button
+						type="button"
+						className="btn btn-xs btn-primary"
+						onClick={addImage}
+						disabled={saving || !newImageUrl.trim()}
+					>
+						添加
+					</button>
+				</div>
+			</div>
+
+			{/* Embedding Status */}
+			<div className="flex items-center gap-2">
+				<span className="text-[10px]">人脸特征:</span>
+				{hasEmbedding ? (
+					<span className="badge badge-success badge-xs">已计算</span>
+				) : (
+					<button
+						type="button"
+						className="btn btn-xs btn-outline btn-info"
+						onClick={computeEmbedding}
+						disabled={computing}
+					>
+						{computing ? "计算中..." : "计算人脸特征"}
+					</button>
+				)}
+			</div>
+
+			{saving && <span className="text-[10px] text-base-content/50">保存中...</span>}
 		</div>
 	);
 }

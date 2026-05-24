@@ -155,6 +155,15 @@ function CharacterCard({ character }: { character: ReviewedCharacter }) {
 					)}
 					<button
 						type="button"
+						className="btn btn-sm btn-circle btn-ghost text-info hover:bg-info/30 touch-target"
+						title="版本历史"
+						onPointerDown={stopCanvasDrag}
+						onClick={() => handleAction("history")}
+					>
+						<SvgIcon name="clock-3" size={14} />
+					</button>
+					<button
+						type="button"
 						className="btn btn-sm btn-circle btn-ghost text-primary hover:bg-primary/30 touch-target"
 						title="添加到资产库"
 						onPointerDown={stopCanvasDrag}
@@ -345,6 +354,15 @@ function ShotCard({ shot }: { shot: ReviewedShot }) {
 							<SvgIcon name="check" size={14} />
 						</button>
 					)}
+					<button
+						type="button"
+						className="btn btn-sm btn-circle btn-ghost text-info hover:bg-info/30 touch-target"
+						title="版本历史"
+						onPointerDown={stopCanvasDrag}
+						onClick={() => handleAction("history")}
+					>
+						<SvgIcon name="clock-3" size={14} />
+					</button>
 					<button
 						type="button"
 						className="btn btn-sm btn-circle btn-ghost text-primary hover:bg-primary/30 touch-target"

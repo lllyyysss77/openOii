@@ -10,6 +10,7 @@ import type {
 	RecoverySummaryRead,
 	RunAwaitingConfirmEventData,
 	Shot,
+	StoryOutline,
 	WorkflowStage,
 } from "~/types";
 
@@ -39,11 +40,20 @@ interface EditorState {
 	projectUpdatedAt: number | null;
 	projectTitle: string | null;
 	projectSummary: string | null;
+	projectStoryOutline: StoryOutline | null;
+	projectVisualBible: string | null;
+	projectOutlineApproved: boolean;
 	projectStory: string | null;
 	projectStyle: string | null;
 	projectTargetShotCount: number | null;
 	projectCharacterHints: string[] | null;
+	projectCreationMode: string | null;
 	projectReferenceImages: string[] | null;
+	projectExports: string[] | null;
+	projectProviderSettings: ProjectProviderSettings | null;
+	projectUniverseId: number | null;
+	projectChapterNumber: number | null;
+	projectChapterTitle: string | null;
 	blockingClips: BlockingClip[] | null;
 
 	setSelectedShot: (id: number | null) => void;
@@ -66,11 +76,20 @@ interface EditorState {
 	setProjectUpdatedAt: (timestamp: number) => void;
 	setProjectTitle: (title: string | null) => void;
 	setProjectSummary: (summary: string | null) => void;
+	setProjectStoryOutline: (outline: StoryOutline | null) => void;
+	setProjectVisualBible: (visualBible: string | null) => void;
+	setProjectOutlineApproved: (approved: boolean) => void;
 	setProjectStory: (story: string | null) => void;
 	setProjectStyle: (style: string | null) => void;
 	setProjectTargetShotCount: (count: number | null) => void;
 	setProjectCharacterHints: (hints: string[] | null) => void;
+	setProjectCreationMode: (mode: string | null) => void;
 	setProjectReferenceImages: (images: string[] | null) => void;
+	setProjectExports: (exports: string[] | null) => void;
+	setProjectProviderSettings: (settings: ProjectProviderSettings | null) => void;
+	setProjectUniverseId: (id: number | null) => void;
+	setProjectChapterNumber: (chapter: number | null) => void;
+	setProjectChapterTitle: (title: string | null) => void;
 	setBlockingClips: (clips: BlockingClip[] | null) => void;
 	setAwaitingConfirm: (
 		awaiting: boolean,
@@ -117,11 +136,20 @@ const initialState = {
 	projectUpdatedAt: null,
 	projectTitle: null,
 	projectSummary: null,
+	projectStoryOutline: null,
+	projectVisualBible: null,
+	projectOutlineApproved: false,
 	projectStory: null,
 	projectStyle: null,
 	projectTargetShotCount: null,
 	projectCharacterHints: null,
+	projectCreationMode: null,
 	projectReferenceImages: null,
+	projectExports: null,
+	projectProviderSettings: null,
+	projectUniverseId: null,
+	projectChapterNumber: null,
+	projectChapterTitle: null,
 	blockingClips: null,
 	...initialRunState,
 };
@@ -176,6 +204,12 @@ export const useEditorStore = create<EditorState>()(
 				set({ projectTitle: title }, false, "setProjectTitle"),
 			setProjectSummary: (summary) =>
 				set({ projectSummary: summary }, false, "setProjectSummary"),
+			setProjectStoryOutline: (outline) =>
+				set({ projectStoryOutline: outline }, false, "setProjectStoryOutline"),
+			setProjectVisualBible: (visualBible) =>
+				set({ projectVisualBible: visualBible }, false, "setProjectVisualBible"),
+			setProjectOutlineApproved: (approved) =>
+				set({ projectOutlineApproved: approved }, false, "setProjectOutlineApproved"),
 			setProjectStory: (story) =>
 				set({ projectStory: story }, false, "setProjectStory"),
 			setProjectStyle: (style) =>
@@ -192,12 +226,32 @@ export const useEditorStore = create<EditorState>()(
 					false,
 					"setProjectCharacterHints",
 				),
+			setProjectCreationMode: (mode) =>
+				set({ projectCreationMode: mode }, false, "setProjectCreationMode"),
 			setProjectReferenceImages: (images) =>
 				set(
 					{ projectReferenceImages: images },
 					false,
 					"setProjectReferenceImages",
 				),
+			setProjectExports: (exports) =>
+				set({ projectExports: exports }, false, "setProjectExports"),
+			setProjectProviderSettings: (settings) =>
+				set(
+					{ projectProviderSettings: settings },
+					false,
+					"setProjectProviderSettings",
+				),
+			setProjectUniverseId: (id) =>
+				set({ projectUniverseId: id }, false, "setProjectUniverseId"),
+			setProjectChapterNumber: (chapter) =>
+				set(
+					{ projectChapterNumber: chapter },
+					false,
+					"setProjectChapterNumber",
+				),
+			setProjectChapterTitle: (title) =>
+				set({ projectChapterTitle: title }, false, "setProjectChapterTitle"),
 			setBlockingClips: (clips) =>
 				set({ blockingClips: clips }, false, "setBlockingClips"),
 			setAwaitingConfirm: (awaiting, agent = null, runId) =>

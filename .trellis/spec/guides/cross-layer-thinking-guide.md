@@ -45,6 +45,10 @@ For each boundary:
 - What is the exact input format?
 - What is the exact output format?
 - What errors can occur?
+- Which executable test will fail if frontend and backend fields drift?
+- If a route is parent-scoped (for example `/projects/{project_id}/...`),
+  where is parent ownership validated and is the parent id present in cached or
+  async status payloads?
 
 ---
 

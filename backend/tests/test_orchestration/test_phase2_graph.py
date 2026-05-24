@@ -25,6 +25,8 @@ from app.orchestration.nodes import (
     route_after_compose_merge,
     route_after_compose_approval,
     route_after_review,
+    route_after_critique_character_images,
+    route_after_critique_shot_images,
     route_from_start,
 )
 
@@ -67,13 +69,15 @@ def test_phase2_runtime_config_uses_persisted_run_thread_id() -> None:
 def test_route_helpers_fall_back_to_expected_stages() -> None:
     assert route_after_characters_approval({}) == "plan_shots"
     assert route_after_shots_approval({}) == "render_characters"
-    assert route_after_character_images_approval({}) == "render_shots"
-    assert route_after_shot_images_approval({}) == "compose_videos"
+    assert route_after_character_images_approval({}) == "critique_character_images"
+    assert route_after_shot_images_approval({}) == "critique_shot_images"
     assert route_after_compose_videos({}) == "compose_merge"
-    assert route_after_compose_merge({}) == "compose_approval"
+    assert route_after_compose_merge({}) == "add_audio"
     assert route_after_compose_approval({}) == "__end__"
     assert route_after_review({}) == "plan_characters"
-    assert route_from_start({}) == "plan_characters"
+    assert route_after_critique_character_images({}) == "render_shots"
+    assert route_after_critique_shot_images({}) == "compose_videos"
+    assert route_from_start({}) == "plan_outline"
 
 
 def test_approval_result_helpers_set_review_routing() -> None:
@@ -218,6 +222,9 @@ class _NoopAgent:
         self.name = name
         self._executed = executed
 
+    async def run_outline(self, _ctx: Any) -> None:
+        self._executed.append(f"{self.name}_outline")
+
     async def run_characters(self, _ctx: Any) -> None:
         self._executed.append(f"{self.name}_characters")
 
@@ -243,6 +250,7 @@ class _Orchestrator:
     def __init__(self, executed: list[str]) -> None:
         self.ws = _Ws()
         self.agents = [
+            _NoopAgent("outline", executed),
             _NoopAgent("plan", executed),
             _NoopAgent("render", executed),
             _NoopAgent("compose", executed),
@@ -453,17 +461,17 @@ async def test_shot_images_approval_auto_routes_to_compose_when_video_invalid() 
 
     state = await shot_images_approval_node({}, runtime)
 
-    assert state["route_stage"] == "compose_videos"
+    assert state["route_stage"] == "critique_shot_images"
 
 
 def test_route_helpers_prefer_route_stage_and_fallbacks():
-    assert route_from_start({}) == "plan_characters"
+    assert route_from_start({}) == "plan_outline"
     assert route_after_review({}) == "plan_characters"
     assert route_after_characters_approval({}) == "plan_shots"
     assert route_after_characters_approval({"review_requested": True}) == "review"
     assert route_after_shots_approval({}) == "render_characters"
     assert route_after_shots_approval({"review_requested": True}) == "review"
-    assert route_after_shot_images_approval({}) == "compose_videos"
+    assert route_after_shot_images_approval({}) == "critique_shot_images"
 
 
 @pytest.mark.asyncio

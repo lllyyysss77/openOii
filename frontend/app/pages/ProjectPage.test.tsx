@@ -126,6 +126,20 @@ const storeState: {
   setSelectedCharacter: ReturnType<typeof vi.fn>;
   setHighlightedMessage: ReturnType<typeof vi.fn>;
   setProjectVideoUrl: ReturnType<typeof vi.fn>;
+  setProjectStatus: ReturnType<typeof vi.fn>;
+  setProjectTitle: ReturnType<typeof vi.fn>;
+  setProjectSummary: ReturnType<typeof vi.fn>;
+  setProjectStory: ReturnType<typeof vi.fn>;
+  setProjectStyle: ReturnType<typeof vi.fn>;
+  setProjectTargetShotCount: ReturnType<typeof vi.fn>;
+  setProjectCharacterHints: ReturnType<typeof vi.fn>;
+  setProjectCreationMode: ReturnType<typeof vi.fn>;
+  setProjectReferenceImages: ReturnType<typeof vi.fn>;
+  setProjectExports: ReturnType<typeof vi.fn>;
+  setProjectProviderSettings: ReturnType<typeof vi.fn>;
+  setProjectUniverseId: ReturnType<typeof vi.fn>;
+  setProjectChapterNumber: ReturnType<typeof vi.fn>;
+  setProjectChapterTitle: ReturnType<typeof vi.fn>;
   setCharacters: ReturnType<typeof vi.fn>;
   setShots: ReturnType<typeof vi.fn>;
   setRecoveryControl: ReturnType<typeof vi.fn>;
@@ -136,6 +150,9 @@ const storeState: {
   resetRunState: ReturnType<typeof vi.fn>;
   runMode: string;
   setRunMode: ReturnType<typeof vi.fn>;
+  setProjectStoryOutline: ReturnType<typeof vi.fn>;
+  setProjectVisualBible: ReturnType<typeof vi.fn>;
+  setProjectOutlineApproved: ReturnType<typeof vi.fn>;
 } = {
   isGenerating: false,
   progress: 0,
@@ -165,6 +182,20 @@ const storeState: {
   setSelectedCharacter: vi.fn(),
   setHighlightedMessage: vi.fn(),
   setProjectVideoUrl: vi.fn(),
+  setProjectStatus: vi.fn(),
+  setProjectTitle: vi.fn(),
+  setProjectSummary: vi.fn(),
+  setProjectStory: vi.fn(),
+  setProjectStyle: vi.fn(),
+  setProjectTargetShotCount: vi.fn(),
+  setProjectCharacterHints: vi.fn(),
+  setProjectCreationMode: vi.fn(),
+  setProjectReferenceImages: vi.fn(),
+  setProjectExports: vi.fn(),
+  setProjectProviderSettings: vi.fn(),
+  setProjectUniverseId: vi.fn(),
+  setProjectChapterNumber: vi.fn(),
+  setProjectChapterTitle: vi.fn(),
   setCharacters: vi.fn(),
   setShots: vi.fn(),
   setRecoveryControl: vi.fn(),
@@ -177,6 +208,9 @@ const storeState: {
   resetRunState: vi.fn(),
   runMode: 'manual' as string,
   setRunMode: vi.fn(),
+  setProjectStoryOutline: vi.fn(),
+  setProjectVisualBible: vi.fn(),
+  setProjectOutlineApproved: vi.fn(),
 };
 const mutateSpy = vi.fn();
 const sendMock = vi.fn();

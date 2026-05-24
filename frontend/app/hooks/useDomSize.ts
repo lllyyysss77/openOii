@@ -30,7 +30,7 @@ export function useDomSize(shape: TLShape, editor: Editor | null) {
 
   useLayoutEffect(() => {
     updateSize();
-  });
+  }, [updateSize]);
 
   useLayoutEffect(() => {
     if (!ref.current || !editor) return;

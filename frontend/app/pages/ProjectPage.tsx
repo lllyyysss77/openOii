@@ -13,12 +13,14 @@ import { StagePipeline } from "~/components/layout/StagePipeline";
 import { StageView } from "~/components/layout/StageView";
 import { AssetDrawer } from "~/components/panels/AssetDrawer";
 import { HistoryDrawer } from "~/components/panels/HistoryDrawer";
+import { VersionCompareDrawer } from "~/components/panels/VersionCompareDrawer";
 import { Button } from "~/components/ui/Button";
 import { Card } from "~/components/ui/Card";
 import { useProjectWebSocket } from "~/hooks/useWebSocket";
+import { canvasEvents } from "~/components/canvas/canvasEvents";
 import { projectsApi } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
-import type { ProjectProviderSettings, RecoveryControlRead } from "~/types";
+import type { ProjectProviderSettings, RecoveryControlRead, VersionEntityType } from "~/types";
 import { ApiError } from "~/types/errors";
 import { toast } from "~/utils/toast";
 import { isWorkflowStage } from "~/utils/workflowStage";
@@ -50,11 +52,23 @@ export function ProjectPage() {
 	const hasRecovery = Boolean(storeRecoveryControl);
 	const [assetsOpen, setAssetsOpen] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
+	const [versionOpen, setVersionOpen] = useState(false);
+	const [versionTarget, setVersionTarget] = useState<{
+		entityType: VersionEntityType;
+		entityId: number;
+	} | null>(null);
 	const autoStartTriggered = useRef(false);
 	const generateRequestTokenRef = useRef(0);
 	const retryCount = useRef(0);
 
 	const { send } = useProjectWebSocket(projectId);
+
+	useEffect(() => {
+		return canvasEvents.on("version-history", (target) => {
+			setVersionTarget({ entityType: target.entityType, entityId: target.entityId });
+			setVersionOpen(true);
+		});
+	}, []);
 
 	const syncStoreWithActiveRun = (run: {
 		id: number;
@@ -136,7 +150,25 @@ export function ProjectPage() {
 
 	useEffect(() => {
 		if (project) {
-			useEditorStore.getState().setProjectVideoUrl(project.video_url ?? null);
+			const editorStore = useEditorStore.getState();
+			editorStore.setProjectVideoUrl(project.video_url ?? null);
+			editorStore.setProjectStatus(project.status ?? null);
+			editorStore.setProjectTitle(project.title ?? null);
+			editorStore.setProjectSummary(project.summary ?? null);
+			editorStore.setProjectStory(project.story ?? null);
+			editorStore.setProjectStyle(project.style ?? null);
+			editorStore.setProjectTargetShotCount(project.target_shot_count ?? null);
+			editorStore.setProjectCharacterHints(project.character_hints ?? null);
+			editorStore.setProjectCreationMode(project.creation_mode ?? null);
+			editorStore.setProjectReferenceImages(project.reference_images ?? null);
+			editorStore.setProjectExports(project.exports ?? null);
+			editorStore.setProjectProviderSettings(project.provider_settings ?? null);
+			editorStore.setProjectUniverseId(project.universe_id ?? null);
+			editorStore.setProjectChapterNumber(project.chapter_number ?? null);
+			editorStore.setProjectChapterTitle(project.chapter_title ?? null);
+			editorStore.setProjectStoryOutline(project.story_outline ?? null);
+			editorStore.setProjectVisualBible(project.visual_bible ?? null);
+			editorStore.setProjectOutlineApproved(project.outline_approved ?? false);
 		}
 	}, [project]);
 
@@ -466,6 +498,13 @@ export function ProjectPage() {
 				open={historyOpen}
 				onClose={() => setHistoryOpen(false)}
 				onNavigate={(id) => navigate(`/project/${id}`)}
+			/>
+			<VersionCompareDrawer
+				open={versionOpen}
+				projectId={project.id}
+				initialEntityType={versionTarget?.entityType}
+				initialEntityId={versionTarget?.entityId ?? null}
+				onClose={() => setVersionOpen(false)}
 			/>
 		</div>
 	);

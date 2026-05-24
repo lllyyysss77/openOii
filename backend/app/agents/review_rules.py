@@ -5,9 +5,11 @@ from typing import Any
 from app.agents.base import AgentContext, BaseAgent
 from app.services.creative_control import infer_feedback_targets
 
-ALLOWED_START_AGENTS = {"plan", "render", "compose"}
+ALLOWED_START_AGENTS = {"outline", "plan", "render", "compose"}
 
 _FEEDBACK_TYPE_MAP = {
+    "outline": "outline",
+    "story_outline": "outline",
     "plan": "plan",
     "story": "plan",
     "script": "plan",

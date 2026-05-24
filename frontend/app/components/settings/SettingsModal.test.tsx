@@ -711,6 +711,9 @@ describe("SettingsModal", () => {
 		const alertSpy = vi
 			.spyOn(window, "alert")
 			.mockImplementation(() => undefined);
+		const consoleErrorSpy = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
 		vi.mocked(configApi.revealValue).mockRejectedValue(
 			new Error("reveal fail") as never,
 		);
@@ -730,6 +733,7 @@ describe("SettingsModal", () => {
 			expect(alertSpy).toHaveBeenCalledWith("获取真实值失败，请检查网络连接");
 		});
 
+		consoleErrorSpy.mockRestore();
 		alertSpy.mockRestore();
 	});
 

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HistoryDrawer } from "./HistoryDrawer";
@@ -127,8 +127,11 @@ describe("HistoryDrawer", () => {
 		const input = screen.getByDisplayValue("测试项目A");
 		fireEvent.change(input, { target: { value: "新名称" } });
 		fireEvent.keyDown(input, { key: "Enter" });
-		await vi.waitFor(() => {
+		await waitFor(() => {
 			expect(projectsApi.update).toHaveBeenCalledWith(1, { title: "新名称" });
+		});
+		await waitFor(() => {
+			expect(screen.queryByDisplayValue("新名称")).not.toBeInTheDocument();
 		});
 	});
 
@@ -150,12 +153,13 @@ describe("HistoryDrawer", () => {
 		fireEvent.click(deleteBtn);
 		const modal = await screen.findByTestId("confirm-modal");
 		expect(modal).toBeInTheDocument();
-		await vi.waitFor(() => {
-			const buttons = screen.getAllByText("删除");
-			fireEvent.click(buttons[buttons.length - 1]);
-		});
-		await vi.waitFor(() => {
+		const buttons = screen.getAllByText("删除");
+		fireEvent.click(buttons[buttons.length - 1]);
+		await waitFor(() => {
 			expect(projectsApi.deleteMany).toHaveBeenCalled();
+		});
+		await waitFor(() => {
+			expect(screen.queryByTestId("confirm-modal")).not.toBeInTheDocument();
 		});
 	});
 

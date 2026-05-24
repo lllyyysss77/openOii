@@ -48,8 +48,8 @@ async def test_run_agent_plan_empty_plan(fake_ws, fake_settings):
 
     with (
         patch("app.services.agent_runner.async_session_maker") as mock_sm,
-        patch("app.services.agent_runner.LLMService", return_value=MagicMock()),
-        patch("app.services.agent_runner.ImageService", return_value=MagicMock()),
+        patch("app.services.agent_runner.create_text_service", return_value=MagicMock()),
+        patch("app.services.agent_runner.create_image_service", return_value=MagicMock()),
         patch("app.services.agent_runner.create_video_service", return_value=MagicMock()),
         patch("app.services.agent_runner.task_manager"),
     ):
@@ -87,8 +87,8 @@ async def test_run_agent_plan_cancelled(fake_ws, fake_settings):
 
     with (
         patch("app.services.agent_runner.async_session_maker") as mock_sm,
-        patch("app.services.agent_runner.LLMService", return_value=MagicMock()),
-        patch("app.services.agent_runner.ImageService", return_value=MagicMock()),
+        patch("app.services.agent_runner.create_text_service", return_value=MagicMock()),
+        patch("app.services.agent_runner.create_image_service", return_value=MagicMock()),
         patch("app.services.agent_runner.create_video_service", return_value=MagicMock()),
         patch("app.services.agent_runner.task_manager"),
     ):
@@ -130,8 +130,8 @@ async def test_run_agent_plan_failure(fake_ws, fake_settings):
 
     with (
         patch("app.services.agent_runner.async_session_maker") as mock_sm,
-        patch("app.services.agent_runner.LLMService", return_value=MagicMock()),
-        patch("app.services.agent_runner.ImageService", return_value=MagicMock()),
+        patch("app.services.agent_runner.create_text_service", return_value=MagicMock()),
+        patch("app.services.agent_runner.create_image_service", return_value=MagicMock()),
         patch("app.services.agent_runner.create_video_service", return_value=MagicMock()),
         patch("app.services.agent_runner.task_manager"),
     ):

@@ -133,10 +133,12 @@ class TestAgentIndex:
         return GenerationOrchestrator(settings=settings, ws=ws, session=None)
 
     def test_valid_agent_indices(self, orchestrator):
-        assert orchestrator._agent_index("plan") == 0
-        assert orchestrator._agent_index("render") == 1
-        assert orchestrator._agent_index("compose") == 2
-        assert orchestrator._agent_index("review") == 3
+        assert orchestrator._agent_index("outline") == 0
+        assert orchestrator._agent_index("plan") == 1
+        assert orchestrator._agent_index("render") == 2
+        assert orchestrator._agent_index("compose") == 3
+        assert orchestrator._agent_index("review") == 4
+        # CriticAgent is invoked via LangGraph nodes, not via orchestrator.agents list
 
     def test_invalid_agent_raises(self, orchestrator):
         with pytest.raises(ValueError, match="Unknown agent"):

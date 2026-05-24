@@ -24,6 +24,8 @@ from app.schemas.project import (
     ProjectRead,
     ProjectUpdate,
     ShotRead,
+    StoryOutlineRead,
+    StoryOutlineUpdate,
 )
 from app.services.file_cleaner import get_local_path
 from app.services.project_deletion import delete_project_by_id, delete_projects_by_ids
@@ -47,15 +49,24 @@ async def _project_read_model(project: Project, settings: Settings) -> ProjectRe
         story=project.story,
         style=project.style,
         summary=project.summary,
+        story_outline=StoryOutlineRead.model_validate(project.story_outline)
+        if isinstance(project.story_outline, dict)
+        else None,
+        visual_bible=project.visual_bible,
+        outline_approved=bool(project.outline_approved),
         video_url=project.video_url,
         status=project.status,
         target_shot_count=project.target_shot_count,
         character_hints=project.character_hints or [],
         creation_mode=project.creation_mode,
         reference_images=project.reference_images or [],
+        exports=project.exports or [],
         provider_settings=await _project_provider_settings(project, settings),
         created_at=project.created_at,
         updated_at=project.updated_at,
+        universe_id=project.universe_id,
+        chapter_number=project.chapter_number,
+        chapter_title=project.chapter_title,
     )
 
 
@@ -78,10 +89,29 @@ async def create_project(
         text_provider_override=payload.text_provider_override,
         image_provider_override=payload.image_provider_override,
         video_provider_override=payload.video_provider_override,
+        universe_id=payload.universe_id,
+        chapter_number=payload.chapter_number,
+        chapter_title=payload.chapter_title,
     )
     session.add(project)
     await session.commit()
     await session.refresh(project)
+
+    # If universe_id provided, also create UniverseProjectLink
+    if payload.universe_id:
+        from app.models.universe import Universe, UniverseProjectLink
+        universe = await session.get(Universe, payload.universe_id)
+        if universe:
+            link = UniverseProjectLink(
+                universe_id=payload.universe_id,
+                project_id=project.id,
+                chapter_number=payload.chapter_number,
+                chapter_title=payload.chapter_title,
+                is_main_story=True,
+            )
+            session.add(link)
+            await session.commit()
+
     return await _project_read_model(project, settings)
 
 
@@ -104,6 +134,45 @@ async def get_project(
 ):
     project = await get_or_404(session, Project, project_id)
     return await _project_read_model(project, settings)
+
+
+@router.get("/{project_id}/outline", response_model=StoryOutlineRead | None)
+async def get_project_outline(project_id: int, session: AsyncSession = SessionDep):
+    project = await get_or_404(session, Project, project_id)
+    if not isinstance(project.story_outline, dict):
+        return None
+    return StoryOutlineRead.model_validate(project.story_outline)
+
+
+@router.put("/{project_id}/outline", response_model=StoryOutlineRead)
+async def update_project_outline(
+    project_id: int,
+    payload: StoryOutlineUpdate,
+    session: AsyncSession = SessionDep,
+):
+    project = await get_or_404(session, Project, project_id)
+    outline = dict(project.story_outline or {})
+    data = payload.model_dump(exclude_unset=True)
+    visual_bible = data.pop("visual_bible", None)
+    summary = data.pop("summary", None)
+    outline_approved = data.pop("outline_approved", None)
+    if "acts" in data and data["acts"] is not None:
+        data["acts"] = [act.model_dump() for act in data["acts"]]
+    outline.update({key: value for key, value in data.items() if value is not None})
+    project.story_outline = outline
+    if visual_bible is not None:
+        project.visual_bible = visual_bible
+    if summary is not None:
+        project.summary = summary
+    if outline_approved is not None:
+        project.outline_approved = outline_approved
+    else:
+        project.outline_approved = False
+    project.updated_at = utcnow()
+    session.add(project)
+    await session.commit()
+    await session.refresh(project)
+    return StoryOutlineRead.model_validate(project.story_outline)
 
 
 @router.get("/{project_id}/final-video")

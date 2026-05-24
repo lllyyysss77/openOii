@@ -27,6 +27,8 @@ const WORKFLOW_STAGE_UNLOCK_RANK: Record<WorkflowStage, number> = {
  */
 const GRANULAR_TO_SIMPLIFIED: Record<string, WorkflowStage> = {
 	// plan phase
+	plan_outline: "plan",
+	outline_approval: "plan_approval",
 	plan_characters: "plan",
 	plan_shots: "plan",
 	characters_approval: "plan_approval",
@@ -36,9 +38,12 @@ const GRANULAR_TO_SIMPLIFIED: Record<string, WorkflowStage> = {
 	render_shots: "render",
 	character_images_approval: "render_approval",
 	shot_images_approval: "render_approval",
+	critique_character_images: "render",
+	critique_shot_images: "render",
 	// compose phase
 	compose_videos: "compose",
 	compose_merge: "compose",
+	add_audio: "compose",
 	compose_approval: "compose",
 	// passthrough for already-simplified names
 	plan: "plan",

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { projectsApi } from "~/services/api";
 import { Button } from "~/components/ui/Button";
@@ -7,6 +7,7 @@ import { Card } from "~/components/ui/Card";
 import {
 	ChevronDownIcon,
 	ChevronUpIcon,
+	GlobeAltIcon,
 	PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { TopBar } from "~/components/layout/TopBar";
@@ -213,6 +214,13 @@ export function HomePage() {
 						<p className="font-sketch text-sm text-base-content/40 mt-2 tracking-wide">
 							用 AI 将故事转化为漫剧视频
 						</p>
+						<Link
+							to="/universes"
+							className="inline-flex items-center gap-1 mt-2 text-xs text-primary/60 hover:text-primary transition-colors font-heading font-bold"
+						>
+							<GlobeAltIcon className="w-3.5 h-3.5" aria-hidden="true" />
+							IP 宇宙
+						</Link>
 					</div>
 
 					<Card className="w-full card-comic animate-draw-in">

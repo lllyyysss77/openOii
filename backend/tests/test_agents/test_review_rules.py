@@ -253,7 +253,7 @@ async def test_review_video_feedback_type_maps_to_compose(test_session, test_set
 
 
 def test_allowed_start_agents():
-    assert ALLOWED_START_AGENTS == {"plan", "render", "compose"}
+    assert ALLOWED_START_AGENTS == {"outline", "plan", "render", "compose"}
 
 
 @pytest.mark.asyncio

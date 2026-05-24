@@ -286,8 +286,8 @@ async def test_update_project(async_client, test_session, test_settings, method)
 
 
 @pytest.mark.asyncio
-async def test_create_project_accepts_fake_video_provider(async_client, monkeypatch):
-    _stub_async_provider_resolution(monkeypatch)
+async def test_create_project_accepts_fake_video_provider(async_client):
+    # _stub_async_provider_resolution is autouse=True, no need to call directly
 
     res = await async_client.post(
         "/api/v1/projects",

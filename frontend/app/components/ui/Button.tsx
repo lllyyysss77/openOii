@@ -16,6 +16,7 @@ export function Button({
   children,
   disabled,
   onClick,
+  type = "button",
   ...props
 }: ButtonProps) {
   const baseStyles = "btn-doodle font-heading cursor-pointer";
@@ -54,6 +55,7 @@ export function Button({
       )}
       disabled={isDisabled}
       onClick={handleClick}
+      type={type}
       {...props}
     >
       {loading ? <span className="loading loading-spinner loading-sm" /> : children}

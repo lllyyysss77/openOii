@@ -9,7 +9,7 @@ import {
 	type TLShapePartial,
 } from "tldraw";
 import "tldraw/tldraw.css";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCanvasLayout } from "~/hooks/useCanvasLayout";
 import type { SectionKey } from "~/hooks/useCanvasLayout";
 import { SECTION_ORDER } from "~/hooks/useCanvasLayout";
@@ -27,6 +27,7 @@ import { ImagePreviewModal, VideoPreviewModal } from "./PreviewModals";
 import { customShapeUtils } from "./shapes";
 import { getPipelineStageIndex } from "~/utils/pipeline";
 import { toast } from "~/utils/toast";
+import { ApiError } from "~/types/errors";
 import { ShapeContextMenu } from "./ShapeContextMenu";
 
 interface InfiniteCanvasProps {
@@ -157,6 +158,22 @@ function resolveShapeLayout(
 	return resolved;
 }
 
+function shapesEqual(existing: TLShape, desired: TLShapePartial): boolean {
+	return (
+		existing.type === desired.type &&
+		existing.x === (desired.x ?? 0) &&
+		existing.y === (desired.y ?? 0) &&
+		JSON.stringify(existing.props ?? {}) === JSON.stringify(desired.props ?? {}) &&
+		JSON.stringify(existing.meta ?? {}) === JSON.stringify(desired.meta ?? {})
+	);
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+	if (error instanceof ApiError) return error.message;
+	if (error instanceof Error) return error.message;
+	return fallback;
+}
+
 function workflowArrowId(fromId: TLShapeId, toId: TLShapeId): TLShapeId {
 	return createShapeId(`workflow-${fromId.replace("shape:", "")}-to-${toId.replace("shape:", "")}`);
 }
@@ -254,6 +271,7 @@ function syncWorkflowArrows(editor: Editor, cardShapes: TLShapePartial[]) {
 }
 
 export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
+	const queryClient = useQueryClient();
 	const editorRef = useRef<Editor | null>(null);
 	const [isInitialized, setIsInitialized] = useState(false);
 	const lastAppliedShapesSignatureRef = useRef<string | null>(null);
@@ -274,6 +292,8 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		recoverySummary,
 		currentRunId,
 		blockingClips,
+		updateCharacter,
+		updateShot,
 	} = useEditorStore(
 		useShallow((s) => ({
 			characters: s.characters,
@@ -288,6 +308,8 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 			recoverySummary: s.recoverySummary,
 			currentRunId: s.currentRunId,
 			blockingClips: s.blockingClips,
+			updateCharacter: s.updateCharacter,
+			updateShot: s.updateShot,
 		})),
 	);
 
@@ -359,111 +381,91 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		blockingClips,
 	});
 
-	const shapesSignature = useMemo(() => JSON.stringify(layout), [layout]);
+	const shapesSignature = useMemo(() => JSON.stringify(layout.shapes), [layout.shapes]);
 	shapesRef.current = layout.shapes;
 	shapesSignatureRef.current = shapesSignature;
 
+	const invalidateProjectData = useCallback(() => {
+		queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+		queryClient.invalidateQueries({ queryKey: ["projects"] });
+		queryClient.invalidateQueries({ queryKey: ["characters", projectId] });
+		queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+	}, [projectId, queryClient]);
+
 	const handleShapeAction = useCallback(
 		(data: CanvasEvents["shape-action"]) => {
-			if (
-				data.action === "add-to-assets" &&
-				data.entityType === "character" &&
-				data.entityId
-			) {
-				assetsApi
-					.createFromCharacter(data.entityId)
-					.then(() => {
-						toast.success({ title: "资产库", message: "已添加到资产库" });
-					})
-					.catch(() => {
-						toast.error({ title: "资产库", message: "添加失败" });
-					});
+			if (data.action === "history") {
+				canvasEvents.emit("version-history", {
+					entityType: data.entityType,
+					entityId: data.entityId,
+				});
 				return;
 			}
 
-			if (
-				data.action === "add-to-assets" &&
-				data.entityType === "shot" &&
-				data.entityId
-			) {
-				assetsApi
-					.createFromShot(data.entityId)
+			if (data.action === "add-to-assets" && data.entityId) {
+				const request = data.entityType === "character"
+					? assetsApi.createFromCharacter(data.entityId)
+					: assetsApi.createFromShot(data.entityId);
+				request
 					.then(() => {
-						toast.success({ title: "资产库", message: "已保存为场景资产" });
+						queryClient.invalidateQueries({ queryKey: ["assets"] });
+						toast.success({ title: "资产库", message: data.entityType === "character" ? "已添加到资产库" : "已保存为场景资产" });
 					})
-					.catch(() => {
-						toast.error({ title: "资产库", message: "保存失败" });
-					});
+					.catch((error) => toast.error({ title: "资产库", message: errorMessage(error, "保存失败") }));
 				return;
 			}
 
 			if (data.action === "approve") {
-				const request =
-					data.entityType === "character"
-						? charactersApi.approve(data.entityId)
-						: shotsApi.approve(data.entityId);
+				const request = data.entityType === "character"
+					? charactersApi.approve(data.entityId)
+					: shotsApi.approve(data.entityId);
 				request
-					.then(() => {
+					.then((entity) => {
+						if (data.entityType === "character") updateCharacter(entity as typeof characters[number]);
+						else updateShot(entity as typeof shots[number]);
+						invalidateProjectData();
 						toast.success({ title: "审批", message: "已批准" });
 					})
-					.catch(() => {
-						toast.error({ title: "审批", message: "批准失败" });
-					});
+					.catch((error) => toast.error({ title: "审批", message: errorMessage(error, "批准失败") }));
 				return;
 			}
 
 			if (data.action === "regenerate") {
-				const request =
-					data.entityType === "character"
-						? charactersApi.regenerate(data.entityId)
-						: shotsApi.regenerate(data.entityId, "image");
+				const request = data.entityType === "character"
+					? charactersApi.regenerate(data.entityId)
+					: shotsApi.regenerate(data.entityId, "image");
 				request
 					.then(() => {
+						invalidateProjectData();
 						toast.success({ title: "重新生成", message: "任务已启动" });
 					})
-					.catch(() => {
-						toast.error({ title: "重新生成", message: "启动失败" });
-					});
+					.catch((error) => toast.error({ title: "重新生成", message: errorMessage(error, "启动失败") }));
 				return;
 			}
 
-			if (
-				data.action === "edit" &&
-				data.entityType === "shot" &&
-				data.shotPatch
-			) {
-				shotsApi
-					.update(data.entityId, data.shotPatch)
-					.then(() => {
+			if (data.action === "edit" && data.entityType === "shot" && data.shotPatch) {
+				shotsApi.update(data.entityId, data.shotPatch)
+					.then((shot) => {
+						updateShot(shot);
+						invalidateProjectData();
 						toast.success({ title: "镜头", message: "已保存修改" });
 					})
-					.catch(() => {
-						toast.error({ title: "镜头", message: "保存失败" });
-					});
+					.catch((error) => toast.error({ title: "镜头", message: errorMessage(error, "保存失败") }));
 				return;
 			}
 
 			if (data.action === "edit") {
 				const content = data.feedbackContent?.trim();
 				if (!content) return;
-				projectsApi
-					.feedback(
-						projectId,
-						content,
-						currentRunId ?? undefined,
-						data.feedbackType,
-						data.entityType,
-						data.entityId,
-					)
+				projectsApi.feedback(projectId, content, currentRunId ?? undefined, data.feedbackType, data.entityType, data.entityId)
 					.then(() => {
+						invalidateProjectData();
 						toast.success({ title: "修改意见", message: "已提交" });
 					})
-					.catch(() => {
-						toast.error({ title: "修改意见", message: "提交失败" });
-					});
+					.catch((error) => toast.error({ title: "修改意见", message: errorMessage(error, "提交失败") }));
 			}
 		},
-		[projectId, currentRunId],
+		[projectId, currentRunId, queryClient, updateCharacter, updateShot, invalidateProjectData],
 	);
 
 	useEffect(() => {
@@ -480,16 +482,6 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 	const handleMount = useCallback((editor: Editor) => {
 		editorRef.current = editor;
 
-		// Clean up any stale IndexedDB persistence from old canvas versions
-		if (typeof indexedDB !== "undefined" && indexedDB.databases) {
-			indexedDB.databases().then((dbs) => {
-				for (const db of dbs) {
-					if (db.name && db.name.startsWith("TLDRAW_")) {
-						indexedDB.deleteDatabase(db.name);
-					}
-				}
-			});
-		}
 
 		// Delete any stale shapes from previous layout architectures
 		const allShapes = editor.getCurrentPageShapes();
@@ -565,7 +557,8 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 				if (!existingMap.has(desired.id)) {
 					toCreate.push(desired);
 				} else {
-					toUpdate.push(desired);
+					const existing = existingMap.get(desired.id);
+					if (existing && !shapesEqual(existing, desired)) toUpdate.push(desired);
 				}
 			}
 
@@ -600,7 +593,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 					onMount={handleMount}
 					persistenceKey="openoii-canvas-v12"
 				>
-					<CanvasToolbar />
+					<CanvasToolbar projectId={projectId} />
 					<ShapeContextMenu />
 				</Tldraw>
 			</div>

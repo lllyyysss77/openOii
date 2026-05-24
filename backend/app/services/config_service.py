@@ -40,6 +40,7 @@ RESTART_REQUIRED_KEYS = {
 RESTART_REQUIRED_PREFIXES = ("DATABASE_", "REDIS_")
 
 SETTINGS_ENV_FIELD_MAP = {name.upper(): name for name in Settings.model_fields}
+SETTINGS_DEFAULTS = Settings()
 
 
 def _resolve_env_path() -> Path:
@@ -88,6 +89,29 @@ def _load_env_file() -> dict[str, str]:
         data[key] = value
     return data
 
+
+
+
+def _load_process_env_values() -> dict[str, str]:
+    """Return runtime process env values for known Settings fields only.
+
+    ConfigService historically read .env but ignored variables passed to the
+    running process (for example TEXT_PROVIDER=fake uvicorn ...). That made the
+    settings UI display stale defaults and test-connection overrides could then
+    accidentally blank out an effective runtime value.
+    """
+    data: dict[str, str] = {}
+    for env_key in SETTINGS_ENV_FIELD_MAP:
+        value = os.getenv(env_key)
+        if value is not None:
+            data[env_key] = value
+    return data
+
+
+def _load_effective_env_values() -> dict[str, str]:
+    values = _load_env_file()
+    values.update(_load_process_env_values())
+    return values
 
 def is_sensitive_key(key: str) -> bool:
     lowered = key.lower()
@@ -188,11 +212,15 @@ class ConfigService:
         return created
 
     async def list_effective(self) -> list[dict[str, Any]]:
-        env_values = _load_env_file()
+        env_values = _load_effective_env_values()
         res = await self.session.execute(select(ConfigItem))
         items = res.scalars().all()
         db_map = {item.key: item for item in items}
-        keys = sorted(set(env_values) | set(db_map), key=str.lower)
+        # Include keys from .env, database, AND Settings model defaults
+        # so that fields like TEXT_PROVIDER (with a code default but no .env entry)
+        # still appear in the config list for the frontend to render.
+        settings_keys = set(SETTINGS_ENV_FIELD_MAP.keys())
+        keys = sorted(set(env_values) | set(db_map) | settings_keys, key=str.lower)
         results: list[dict[str, Any]] = []
         for key in keys:
             item = db_map.get(key)
@@ -200,10 +228,17 @@ class ConfigService:
                 value = item.value
                 is_sensitive = item.is_sensitive or is_sensitive_key(key)
                 source = "db"
-            else:
+            elif key in env_values:
                 value = env_values.get(key)
                 is_sensitive = is_sensitive_key(key)
                 source = "env"
+            else:
+                # Fall back to Settings model default
+                field_name = SETTINGS_ENV_FIELD_MAP.get(key)
+                default_val = getattr(SETTINGS_DEFAULTS, field_name, None) if field_name else None
+                value = str(default_val) if default_val is not None else None
+                is_sensitive = is_sensitive_key(key)
+                source = "default"
             if is_sensitive and value is not None:
                 display_value = mask_value(value)
                 is_masked = True
@@ -230,8 +265,8 @@ class ConfigService:
             return item.value
 
         # 回退到 .env 文件
-        env_values = _load_env_file()
-        return env_values.get(key)
+        env_values = _load_effective_env_values()
+        return env_values.get(key.upper()) or env_values.get(key)
 
     async def build_settings_overrides(self) -> dict[str, Any]:
         res = await self.session.execute(select(ConfigItem))

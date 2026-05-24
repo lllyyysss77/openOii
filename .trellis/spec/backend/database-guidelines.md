@@ -19,6 +19,29 @@
 
 Defined per resource in `app/models/<resource>.py`. Every new model file must be imported in `app/db/session.py`'s `init_db` import block (the `# noqa: F401` line) so `create_all` registers it.
 
+### Current Model Inventory (18 tables)
+
+| Model                  | File                        | Key Columns / Notes                                      |
+| ---------------------- | --------------------------- | -------------------------------------------------------- |
+| `AgentRun`             | `agent_run.py`              | thread_id, status, provider_snapshot                     |
+| `AgentMessage`         | `agent_run.py`              | role, content, agent_name, run_id FK                    |
+| `Artifact`             | `artifact.py`              | file_path, artifact_type, run_id FK                     |
+| `ArtifactVersion`      | `artifact_version.py`      | entity_type, entity_id, version, snapshot (JSON), trigger |
+| `Asset`                | `asset.py`                 | asset_type, image_url, metadata_json, tags              |
+| `Character`            | `project.py`               | reference_images (JSON), face_embedding (Text), visual_notes, project_id FK |
+| `ConfigItem`           | `config_item.py`           | key (unique), value, source, is_sensitive               |
+| `ConsistencyReport`    | `consistency_report.py`    | project_id FK, overall_score, grade, character_reports (JSON) |
+| `Message`              | `message.py`               | role, content, project_id FK                             |
+| `Project`              | `project.py`               | story_outline (JSON), visual_bible, outline_approved, exports (JSON), universe_id FK |
+| `Run`                  | `run.py`                   | project_id FK, status                                    |
+| `Shot`                 | `project.py`               | tts_url, bgm_type, character_ids (JSON), project_id FK   |
+| `ShotCharacterBinding` | `project.py`               | shot_id FK, character_id FK                              |
+| `Stage`                | `stage.py`                 | run_id FK, stage_name, status                            |
+| `StyleTemplate`        | `style_template.py`        | slug (unique), category, style_prompt, negative_prompt   |
+| `Universe`             | `universe.py`              | name, world_setting, style_rules                         |
+| `SharedCharacter`      | `universe.py`              | universe_id FK, visual_notes, face_embedding (Text), canonical_image_url |
+| `UniverseProjectLink`  | `universe.py`              | universe_id FK, project_id FK, chapter_number           |
+
 ### Pattern
 
 ```python
@@ -165,6 +188,31 @@ await session.commit()
   3. Inspect the generated file (autogenerate misses constraint-only changes).
   4. `uv run alembic upgrade head`.
   5. Add a migration test in `backend/tests/test_migrations.py` if the change is non-trivial.
+
+### Migration Gotcha: SQLite `batch_alter_table`
+
+SQLite does not support `ALTER TABLE ... ADD COLUMN ... REFERENCES` (FK constraints in ALTER). Any migration that adds a column with `ForeignKey` to an **existing** table **must** use `batch_alter_table`:
+
+```python
+# Wrong — fails on SQLite
+op.add_column("project", sa.Column("universe_id", sa.Integer(), sa.ForeignKey("universe.id"), nullable=True))
+
+# Correct — works on both SQLite and PostgreSQL
+with op.batch_alter_table("project", schema=None) as batch_op:
+    batch_op.add_column(sa.Column("universe_id", sa.Integer(), nullable=True))
+    # FK enforced at app level; batch mode uses copy-and-move strategy for SQLite
+    # batch_op.create_foreign_key("fk_project_universe_id", "universe", ["universe_id"], ["id"])
+```
+
+**Rule**: `create_table` with FK is fine on SQLite. `add_column` with FK on existing table requires `batch_alter_table`.
+
+### Migration Test Maintenance
+
+`tests/test_migrations.py` has `expected_tables` and column assertions that must be updated when adding new tables or columns:
+
+1. Add new table names to `expected_tables` set.
+2. Add new column names to `project_columns` / `run_columns` assertions.
+3. Import new models at the top of the test file.
 
 ---
 

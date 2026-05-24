@@ -7,13 +7,14 @@ from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine import make_url
 from sqlmodel import SQLModel
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from app.models import agent_run, artifact, config_item, message, project, run, stage  # noqa: F401,E402
+from app.models import agent_run, artifact, config_item, consistency_report, message, project, run, stage, style_template  # noqa: F401,E402
 
 config = context.config
 
@@ -26,11 +27,31 @@ target_metadata = SQLModel.metadata
 def _database_url() -> str:
     env_url = os.getenv("DATABASE_URL")
     if env_url:
-        return env_url
+        return _sync_driver_url(env_url)
     configured_url = config.get_main_option("sqlalchemy.url")
     if not configured_url:
         raise RuntimeError("Alembic database URL is not configured (set DATABASE_URL or sqlalchemy.url)")
-    return configured_url
+    return _sync_driver_url(configured_url)
+
+
+def _sync_driver_url(database_url: str) -> str:
+    """Return a URL usable by Alembic's synchronous migration engine.
+
+    The application runtime uses async SQLAlchemy drivers such as
+    ``postgresql+asyncpg`` and ``sqlite+aiosqlite``. Alembic's env.py builds a
+    synchronous engine with ``engine_from_config``; feeding it an async driver
+    raises ``MissingGreenlet`` before migrations can run.
+    """
+    url = make_url(database_url)
+    drivername = url.drivername
+    replacements = {
+        "postgresql+asyncpg": "postgresql+psycopg2",
+        "sqlite+aiosqlite": "sqlite+pysqlite",
+    }
+    sync_driver = replacements.get(drivername)
+    if sync_driver is None:
+        return database_url
+    return url.set(drivername=sync_driver).render_as_string(hide_password=False)
 
 
 def run_migrations_offline() -> None:

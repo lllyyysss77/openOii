@@ -27,11 +27,19 @@ export function groupConfigs(configs: ConfigItem[]): ConfigSection[] {
 			groups.database.push(config);
 		}
 		// 文本生成服务配置（Anthropic + OpenAI 兼容）
-		else if (key.startsWith("anthropic_") || key.startsWith("text_")) {
+		else if (
+			key.startsWith("anthropic_") ||
+			key.startsWith("text_") ||
+			key.startsWith("fake_text_")
+		) {
 			groups.text.push(config);
 		}
 		// 图像服务配置
-		else if (key.startsWith("image_") || key === "enable_image_to_image") {
+		else if (
+			key.startsWith("image_") ||
+			key.startsWith("fake_image_") ||
+			key === "enable_image_to_image"
+		) {
 			groups.image.push(config);
 		}
 		// 视频服务配置

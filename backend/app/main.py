@@ -30,6 +30,8 @@ async def lifespan(_: FastAPI):
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     (STATIC_DIR / "videos").mkdir(parents=True, exist_ok=True)
     (STATIC_DIR / "images").mkdir(parents=True, exist_ok=True)
+    (STATIC_DIR / "exports").mkdir(parents=True, exist_ok=True)
+    (STATIC_DIR / "fonts").mkdir(parents=True, exist_ok=True)
     log.info("lifespan: calling init_db")
     await init_db()
     log.info("lifespan: init_db done")
@@ -139,9 +141,9 @@ def create_app() -> FastAPI:
                                 {"type": "run_awaiting_confirm", "data": payload},
                             )
                         else:
-                            from app.agents.orchestrator import STAGE_AGENT_MAP
+                            from app.agents.orchestrator import GRAPH_STAGE_FOR_AGENT
 
-                            mapped_stage = STAGE_AGENT_MAP.get(
+                            mapped_stage = GRAPH_STAGE_FOR_AGENT.get(
                                 run.current_agent or "", run.current_agent or "plan"
                             )
                             await ws_manager.send_event(

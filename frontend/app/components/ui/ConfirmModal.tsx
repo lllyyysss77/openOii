@@ -83,7 +83,7 @@ export function ConfirmModal({
 
       {/* 背景遮罩 */}
       <form method="dialog" className="modal-backdrop bg-neutral/50">
-        <button onClick={onClose} disabled={isLoading}>
+        <button type="button" onClick={onClose} disabled={isLoading}>
           close
         </button>
       </form>

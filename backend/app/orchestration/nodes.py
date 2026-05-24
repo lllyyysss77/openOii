@@ -5,6 +5,7 @@ from typing import Any
 from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
+from app.agents.critic import CriticAgent
 from app.agents.review_rules import ALLOWED_START_AGENTS
 from .state import (
     Phase2RuntimeContext,
@@ -15,16 +16,21 @@ from .state import (
 
 
 _STAGE_ARTIFACT_KEYS: dict[str, str] = {
+    "plan_outline": "stage:plan_outline",
     "plan_characters": "stage:plan_characters",
     "plan_shots": "stage:plan_shots",
     "render_characters": "stage:render_characters",
     "render_shots": "stage:render_shots",
     "compose_videos": "stage:compose_videos",
     "compose_merge": "stage:compose_merge",
+    "add_audio": "stage:add_audio",
+    "critique_character_images": "stage:critique_character_images",
+    "critique_shot_images": "stage:critique_shot_images",
 }
 
 # Approval gate → the production stage it guards
 _APPROVAL_FOR: dict[str, str] = {
+    "outline_approval": "plan_outline",
     "characters_approval": "plan_characters",
     "shots_approval": "plan_shots",
     "character_images_approval": "render_characters",
@@ -33,10 +39,26 @@ _APPROVAL_FOR: dict[str, str] = {
 }
 
 _START_AGENT_TO_STAGE: dict[str, str] = {
+    "outline": "plan_outline",
     "plan": "plan_characters",
     "render": "render_characters",
     "compose": "compose_videos",
 }
+
+_STAGE_TO_AGENT: dict[str, str] = {
+    "plan_outline": "outline",
+    "plan_characters": "plan",
+    "plan_shots": "plan",
+    "render_characters": "render",
+    "render_shots": "render",
+    "compose_videos": "compose",
+    "compose_merge": "compose",
+    "add_audio": "compose",
+}
+
+
+def _agent_name_for_stage(stage: str) -> str:
+    return _STAGE_TO_AGENT.get(stage, stage.split("_")[0])
 
 
 def _stage_key(stage: str) -> str:
@@ -93,14 +115,26 @@ async def _run_sub_stage(
             "route_stage": "__end__",
         }
 
+    if stage == "add_audio" and state.get("video_generation_skipped"):
+        return {
+            "current_stage": stage,
+            "stage_history": [stage],
+            "artifact_lineage": [_stage_key(stage)],
+            "video_generation_skipped": True,
+            "route_stage": "__end__",
+        }
+
     if _should_skip_stage(state, stage):
         return {"current_stage": stage}
 
     orchestrator = runtime.context.orchestrator
     progress = workflow_progress_for_stage(stage, within_stage=0.0)
+    agent_name = _agent_name_for_stage(stage)
+    if stage == "plan_outline" and state.get("approval_feedback"):
+        agent_ctx.user_feedback = state.get("approval_feedback")
     await orchestrator._set_run(  # noqa: SLF001
         agent_ctx.run,
-        current_agent=stage.split("_")[0],
+        current_agent=agent_name,
         progress=progress,
     )
     await orchestrator.ws.send_event(
@@ -109,7 +143,7 @@ async def _run_sub_stage(
             "type": "run_progress",
             "data": {
                 "run_id": agent_ctx.run.id,
-                "current_agent": stage.split("_")[0],
+                "current_agent": agent_name,
                 "current_stage": stage,
                 "stage": stage,
                 "next_stage": next_production_stage(stage),
@@ -118,7 +152,7 @@ async def _run_sub_stage(
         },
     )
 
-    agent = orchestrator.agents[orchestrator._agent_index(stage.split("_")[0])]  # noqa: SLF001
+    agent = orchestrator.agents[orchestrator._agent_index(agent_name)]  # noqa: SLF001
     method = getattr(agent, method_name)
     await method(agent_ctx)
 
@@ -233,6 +267,12 @@ def _build_approval_message(agent_ctx: Any, fallback: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+async def plan_outline_node(
+    state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
+) -> dict[str, Any]:
+    return await _run_sub_stage(state, runtime, stage="plan_outline", method_name="run_outline")
+
+
 async def plan_characters_node(
     state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
 ) -> dict[str, Any]:
@@ -273,9 +313,53 @@ async def compose_merge_node(
     return await _run_sub_stage(state, runtime, stage="compose_merge", method_name="run_merge")
 
 
+async def add_audio_node(
+    state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
+) -> dict[str, Any]:
+    """Add TTS dubbing and BGM to shot videos and final merged video."""
+    return await _run_sub_stage(state, runtime, stage="add_audio", method_name="run_add_audio")
+
+
 # ---------------------------------------------------------------------------
 # Approval nodes
 # ---------------------------------------------------------------------------
+
+
+async def outline_approval_node(
+    state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
+) -> dict[str, Any]:
+    agent_ctx = runtime.context.agent_context
+    message = _build_approval_message(agent_ctx, "故事大纲已生成，请确认是否继续角色设计。")
+    result = await _manual_approval_node(
+        runtime,
+        approval_stage="outline_approval",
+        history_key="plan_outline",
+        gate="outline",
+        message=message,
+        next_stage="plan_characters",
+    )
+    if result.get("review_requested"):
+        result["route_stage"] = "plan_outline"
+        result["review_requested"] = False
+        return result
+
+    await agent_ctx.session.refresh(agent_ctx.project)
+    agent_ctx.project.outline_approved = True
+    agent_ctx.session.add(agent_ctx.project)
+    await agent_ctx.session.commit()
+    await agent_ctx.ws.send_event(
+        agent_ctx.project.id,
+        {
+            "type": "project_updated",
+            "data": {
+                "project": {
+                    "id": agent_ctx.project.id,
+                    "outline_approved": True,
+                }
+            },
+        },
+    )
+    return result
 
 
 async def characters_approval_node(
@@ -321,7 +405,7 @@ async def character_images_approval_node(
         history_key="render_characters",
         gate="render",
         message=message,
-        next_stage="render_shots",
+        next_stage="critique_character_images",
     )
 
 
@@ -333,7 +417,7 @@ async def shot_images_approval_node(
         return _auto_approval_result(
             approval_stage="shot_images_approval",
             history_key="render_shots",
-            next_stage="compose_videos",
+            next_stage="critique_shot_images",
         )
 
     message = _build_approval_message(
@@ -345,7 +429,7 @@ async def shot_images_approval_node(
         history_key="render_shots",
         gate="render",
         message=message,
-        next_stage="compose_videos",
+        next_stage="critique_shot_images",
     )
 
 
@@ -362,6 +446,185 @@ async def compose_approval_node(
         message=message,
         next_stage="__end__",
     )
+
+
+# ======================================================================
+# Critique nodes
+# ======================================================================
+
+
+async def critique_character_images_node(
+    state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
+) -> dict[str, Any]:
+    """Run critic review on character images after approval."""
+    agent_ctx = runtime.context.agent_context
+    settings = agent_ctx.settings
+
+    # If critique is disabled, skip straight to the next stage
+    if not settings.critique_enabled:
+        return {
+            "current_stage": "critique_character_images",
+            "stage_history": ["critique_character_images"],
+            "artifact_lineage": [_stage_key("critique_character_images")],
+            "critique_scores": {},
+            "route_stage": "render_shots",
+        }
+
+    # Check max rounds
+    critique_round = state.get("critique_round", 0)
+    if isinstance(critique_round, int) and critique_round >= settings.critique_max_rounds:
+        return {
+            "current_stage": "critique_character_images",
+            "stage_history": ["critique_character_images"],
+            "artifact_lineage": [_stage_key("critique_character_images")],
+            "critique_scores": state.get("critique_scores", {}),
+            "route_stage": "render_shots",
+        }
+
+    orchestrator = runtime.context.orchestrator
+    progress = workflow_progress_for_stage("critique_character_images", within_stage=0.0)
+    await orchestrator._set_run(  # noqa: SLF001
+        agent_ctx.run,
+        current_agent="critic",
+        progress=progress,
+    )
+    await orchestrator.ws.send_event(
+        agent_ctx.project.id,
+        {
+            "type": "run_progress",
+            "data": {
+                "run_id": agent_ctx.run.id,
+                "current_agent": "critic",
+                "current_stage": "critique_character_images",
+                "stage": "critique_character_images",
+                "next_stage": "render_shots",
+                "progress": progress,
+            },
+        },
+    )
+
+    critic = CriticAgent()
+    result = await critic.run_character_review(agent_ctx)
+
+    should_regenerate = result.get("should_regenerate", False)
+
+    # Determine route: if score below threshold and within max rounds, regenerate
+    if should_regenerate and critique_round < settings.critique_max_rounds - 1:
+        # Route back to render_characters for regeneration
+        next_route = "render_characters"
+        new_round = critique_round + 1
+    else:
+        # Either quality is OK or we've hit max rounds
+        next_route = "render_shots"
+        new_round = critique_round
+
+    return {
+        "current_stage": "critique_character_images",
+        "stage_history": ["critique_character_images"],
+        "artifact_lineage": [_stage_key("critique_character_images")],
+        "critique_scores": result.get("scores", {}),
+        "critique_round": new_round,
+        "route_stage": next_route,
+    }
+
+
+async def critique_shot_images_node(
+    state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
+) -> dict[str, Any]:
+    """Run critic review on shot images after approval."""
+    agent_ctx = runtime.context.agent_context
+    settings = agent_ctx.settings
+
+    # If critique is disabled, skip straight to the next stage
+    if not settings.critique_enabled:
+        return {
+            "current_stage": "critique_shot_images",
+            "stage_history": ["critique_shot_images"],
+            "artifact_lineage": [_stage_key("critique_shot_images")],
+            "critique_scores": {},
+            "route_stage": "compose_videos",
+        }
+
+    # Check max rounds
+    critique_round = state.get("critique_round", 0)
+    if isinstance(critique_round, int) and critique_round >= settings.critique_max_rounds:
+        return {
+            "current_stage": "critique_shot_images",
+            "stage_history": ["critique_shot_images"],
+            "artifact_lineage": [_stage_key("critique_shot_images")],
+            "critique_scores": state.get("critique_scores", {}),
+            "route_stage": "compose_videos",
+        }
+
+    orchestrator = runtime.context.orchestrator
+    progress = workflow_progress_for_stage("critique_shot_images", within_stage=0.0)
+    await orchestrator._set_run(  # noqa: SLF001
+        agent_ctx.run,
+        current_agent="critic",
+        progress=progress,
+    )
+    await orchestrator.ws.send_event(
+        agent_ctx.project.id,
+        {
+            "type": "run_progress",
+            "data": {
+                "run_id": agent_ctx.run.id,
+                "current_agent": "critic",
+                "current_stage": "critique_shot_images",
+                "stage": "critique_shot_images",
+                "next_stage": "compose_videos",
+                "progress": progress,
+            },
+        },
+    )
+
+    critic = CriticAgent()
+    result = await critic.run_shot_review(agent_ctx)
+
+    should_regenerate = result.get("should_regenerate", False)
+
+    # Determine route: if score below threshold and within max rounds, regenerate
+    if should_regenerate and critique_round < settings.critique_max_rounds - 1:
+        next_route = "render_shots"
+        new_round = critique_round + 1
+    else:
+        next_route = "compose_videos"
+        new_round = critique_round
+
+    return {
+        "current_stage": "critique_shot_images",
+        "stage_history": ["critique_shot_images"],
+        "artifact_lineage": [_stage_key("critique_shot_images")],
+        "critique_scores": result.get("scores", {}),
+        "critique_round": new_round,
+        "route_stage": next_route,
+    }
+
+
+def route_after_critique_character_images(state: Phase2State) -> str:
+    """Route after character image critique.
+
+    Uses route_stage set by the critique node:
+    - 'render_characters' if score < threshold and within max rounds
+    - 'render_shots' if quality OK or max rounds exceeded
+    """
+    route = state.get("route_stage")
+    if route:
+        return route
+    return "render_shots"
+
+
+def route_after_critique_shot_images(state: Phase2State) -> str:
+    """Route after shot image critique.
+
+    Uses route_stage set by the critique node:
+    - 'render_shots' if score < threshold and within max rounds
+    - 'compose_videos' if quality OK or max rounds exceeded
+    """
+    route = state.get("route_stage")
+    if route:
+        return route
+    return "compose_videos"
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +684,7 @@ async def review_node(state: Phase2State, runtime: Runtime[Phase2RuntimeContext]
 
 
 def route_from_start(state: Phase2State) -> str:
-    return state.get("current_stage") or "plan_characters"
+    return state.get("current_stage") or "plan_outline"
 
 
 def _route_after_approval(state: Phase2State, *, default_next: str) -> str:
@@ -433,6 +696,10 @@ def _route_after_approval(state: Phase2State, *, default_next: str) -> str:
     return default_next
 
 
+def route_after_outline_approval(state: Phase2State) -> str:
+    return _route_after_approval(state, default_next="plan_characters")
+
+
 def route_after_characters_approval(state: Phase2State) -> str:
     return _route_after_approval(state, default_next="plan_shots")
 
@@ -442,11 +709,11 @@ def route_after_shots_approval(state: Phase2State) -> str:
 
 
 def route_after_character_images_approval(state: Phase2State) -> str:
-    return _route_after_approval(state, default_next="render_shots")
+    return _route_after_approval(state, default_next="critique_character_images")
 
 
 def route_after_shot_images_approval(state: Phase2State) -> str:
-    return _route_after_approval(state, default_next="compose_videos")
+    return _route_after_approval(state, default_next="critique_shot_images")
 
 
 def route_after_compose_videos(state: Phase2State) -> str:
@@ -458,7 +725,7 @@ def route_after_compose_videos(state: Phase2State) -> str:
 def route_after_compose_merge(state: Phase2State) -> str:
     if state.get("video_generation_skipped") or state.get("route_stage") == "__end__":
         return "__end__"
-    return "compose_approval"
+    return "add_audio"
 
 
 def route_after_compose_approval(state: Phase2State) -> str:

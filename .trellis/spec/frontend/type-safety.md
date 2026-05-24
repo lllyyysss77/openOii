@@ -79,23 +79,61 @@ default: {
 
 The current `applyWsEvent` switch doesn't add `default` because it intentionally ignores unknown event types (forward-compat with newer servers). If you add a critical control event, prefer exhaustiveness.
 
+### WS event executable contract
+
+Backend and frontend WS event type unions must match. The backend test
+`backend/tests/test_schemas/test_ws_events.py::TestWsEventSchemaRegistry::test_backend_and_frontend_ws_event_type_unions_match`
+parses `frontend/app/types/index.ts` and fails on drift.
+
+When adding a user-visible WS event:
+
+1. Add/adjust backend schema and `_EVENT_DATA_MODELS`.
+2. Add/adjust frontend `WsEventType` and event data interface in `app/types/index.ts`.
+3. Add a `case` in `applyWsEvent`.
+4. Add a consumer test in `app/hooks/useWebSocket.test.ts` proving the UI/store/toast effect.
+
+Existing extended-event consumer coverage includes `agent_thinking`,
+`critique_result`, `version_created`, `version_rollback`, `audio_generated`,
+`bible_updated`, `export_completed`, and `consistency_eval_completed`.
+
 ---
 
 ## API Boundary Typing
 
-`app/services/api.ts` is the only module allowed to call `axios`. Each function declares the request and response types explicitly, e.g.:
+`app/services/api.ts` is the only module allowed to call the backend HTTP API.
+Each function declares request and response types explicitly, e.g.:
 
 ```ts
-export async function getProject(id: number): Promise<Project> {
-  const res = await axios.get<Project>(`${API_BASE}/api/v1/projects/${id}`);
-  return res.data;
-}
+export const projectsApi = {
+  get: (id: number) => fetchApi<Project>(`/api/v1/projects/${id}`),
+};
 ```
 
 Rules:
 
 - Return concrete entity types (`Promise<Project>`), never `Promise<any>` or `Promise<unknown>`.
 - Validate at the boundary if the server's contract is fragile. Today the project trusts the backend's Pydantic response models. If we add Zod or similar, it goes here.
+- Keep frontend DTOs aligned with backend Pydantic schemas. `UpdateProjectPayload`
+  must cover exactly the fields accepted by `backend/app/schemas/project.py::ProjectUpdate`
+  plus provider override fields via `ProjectProviderOverridesPayload`.
+- When a backend response identifies a child resource through a parent-scoped route,
+  model the parent id in the frontend type too. Example: `ExportResponse` includes
+  `project_id` because status is read from
+  `/api/v1/projects/{project_id}/export/{export_id}/status`.
+
+### API executable contract tests
+
+Backend owns executable cross-layer guards for contracts that are easy to drift:
+
+- `backend/tests/test_schemas/test_project_contract.py` parses
+  `frontend/app/types/index.ts` and compares `UpdateProjectPayload` against
+  `ProjectUpdate.model_fields`.
+- `backend/tests/test_schemas/test_ws_events.py` compares backend/frontend
+  WebSocket event type unions.
+
+If you add or remove backend DTO fields, update the frontend type and the
+contract test together. Do not leave a narrower frontend payload type just
+because no current component uses the new field.
 
 ---
 
@@ -168,7 +206,22 @@ interface ToastStore {
 
 ```ts
 export type UpdateProjectPayload = Partial<
-  Pick<Project, "title" | "story" | "style"> & ProjectProviderOverridesPayload
+  Pick<
+    Project,
+    | "title"
+    | "story"
+    | "style"
+    | "status"
+    | "target_shot_count"
+    | "character_hints"
+    | "creation_mode"
+    | "reference_images"
+    | "exports"
+    | "universe_id"
+    | "chapter_number"
+    | "chapter_title"
+  > &
+    ProjectProviderOverridesPayload
 >;
 ```
 
@@ -183,6 +236,9 @@ export type UpdateProjectPayload = Partial<
 3. **Importing types from `~/types` without `import type`** — Vite tree-shakes less aggressively.
 4. **Defining the same DTO type in two places** (component + store + API) and watching them drift.
 5. **Casting `event.target`** in event handlers without checking the element kind. Use `e.currentTarget` or check `instanceof HTMLInputElement` first.
+6. **Including backend-removed event types in frontend `WsEventType` union** — creates dead code paths. If backend removes an event type from its `WsEventType` Literal, remove it from the frontend union too, unless backward compatibility with older backend versions is needed.
+7. **Not adding new store methods to test mocks** — when editorStore gains new methods (e.g., `setProjectStoryOutline`), all test files that mock the store must include them, otherwise `TypeError: store.method is not a function` at render time.
+8. **Leaving `<button>` without an explicit `type`** — inside forms it defaults to submit. The shared `Button` component defaults to `type="button"`; only pass `type="submit"` when the button should submit a form. Native buttons in forms or dialog backdrops must also set `type="button"` unless they intentionally submit.
 
 ---
 
@@ -192,7 +248,9 @@ Before opening a PR with type changes:
 
 - [ ] No new `any` / `as any` / `@ts-ignore`.
 - [ ] All cross-boundary data types live in `app/types/`.
+- [ ] Frontend DTOs match backend Pydantic request/response schemas or have an explicit compatibility reason.
 - [ ] New event types are added to `WsEvent` and handled in `applyWsEvent`.
+- [ ] New user-visible WS events have an `applyWsEvent` consumer test.
 - [ ] `pnpm exec tsc --noEmit` passes.
 - [ ] `pnpm build` passes (it includes the type check).
 

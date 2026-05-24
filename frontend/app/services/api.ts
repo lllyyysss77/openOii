@@ -4,10 +4,18 @@ import type {
 	Character,
 	CharacterUpdatePayload,
 	CreateProjectPayload,
+	ExportResponse,
 	Project,
+	RollbackRequest,
+	RollbackResponse,
 	Shot,
 	ShotUpdatePayload,
+	StoryOutline,
+	StoryOutlineUpdatePayload,
 	UpdateProjectPayload,
+	VersionCompareRead,
+	VersionEntityType,
+	VersionListRead,
 } from "~/types";
 
 const API_BASE = getApiBase();
@@ -199,6 +207,15 @@ export const projectsApi = {
 
 	getShots: (id: number) => fetchApi<Shot[]>(`/api/v1/projects/${id}/shots`),
 
+	getOutline: (id: number) =>
+		fetchApi<StoryOutline | null>(`/api/v1/projects/${id}/outline`),
+
+	updateOutline: (id: number, data: StoryOutlineUpdatePayload) =>
+		fetchApi<StoryOutline>(`/api/v1/projects/${id}/outline`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		}),
+
 	getMessages: (id: number) =>
 		fetchApi<import("~/types").Message[]>(`/api/v1/projects/${id}/messages`),
 
@@ -289,6 +306,44 @@ export const charactersApi = {
 		),
 	delete: (id: number) =>
 		fetchApi<void>(`/api/v1/characters/${id}`, { method: "DELETE" }),
+
+	// Character Bible
+	getBible: (id: number) =>
+		fetchApi<import("~/types").CharacterBible>(
+			`/api/v1/characters/${id}/bible`,
+		),
+
+	updateBible: (
+		id: number,
+		data: { visual_notes?: string | null; reference_images?: string[] },
+	) =>
+		fetchApi<import("~/types").CharacterBible>(
+			`/api/v1/characters/${id}/bible`,
+			{
+				method: "PUT",
+				body: JSON.stringify(data),
+			},
+		),
+
+	addReferenceImage: (id: number, imageUrl: string) =>
+		fetchApi<import("~/types").CharacterBible>(
+			`/api/v1/characters/${id}/reference-images`,
+			{
+				method: "POST",
+				body: JSON.stringify({ image_url: imageUrl }),
+			},
+		),
+
+	deleteReferenceImage: (id: number, index: number) =>
+		fetchApi<void>(
+			`/api/v1/characters/${id}/reference-images/${index}`,
+			{ method: "DELETE" },
+		),
+
+	computeEmbedding: (id: number) =>
+		fetchApi<Character>(`/api/v1/characters/${id}/compute-embedding`, {
+			method: "POST",
+		}),
 };
 
 // Assets API
@@ -332,6 +387,34 @@ export const assetsApi = {
 };
 
 // Config API
+export const versionsApi = {
+	list: (projectId: number, entityType: VersionEntityType, entityId: number) =>
+		fetchApi<VersionListRead>(
+			`/api/v1/projects/${projectId}/versions?entity_type=${entityType}&entity_id=${entityId}`,
+		),
+	get: (versionId: number) =>
+		fetchApi<import("~/types").ArtifactVersion>(`/api/v1/versions/${versionId}`),
+	rollback: (entityType: VersionEntityType, entityId: number, targetVersion: number) =>
+		fetchApi<RollbackResponse>("/api/v1/versions/rollback", {
+			method: "POST",
+			body: JSON.stringify({
+				entity_type: entityType,
+				entity_id: entityId,
+				target_version: targetVersion,
+			} satisfies RollbackRequest),
+		}),
+	compare: (
+		projectId: number,
+		entityType: VersionEntityType,
+		entityId: number,
+		v1: number,
+		v2: number,
+	) =>
+		fetchApi<VersionCompareRead>(
+			`/api/v1/projects/${projectId}/versions/compare?entity_type=${entityType}&entity_id=${entityId}&v1=${v1}&v2=${v2}`,
+		),
+};
+
 export const configApi = {
 	get: () => fetchApi<import("~/types").ConfigItem[]>("/api/v1/config"),
 	update: (config: Record<string, import("~/types").ConfigValue>) => {
@@ -387,4 +470,163 @@ export const configApi = {
 			method: "POST",
 			body: JSON.stringify({ key }),
 		}),
+};
+
+export const styleTemplatesApi = {
+	list: (params?: { category?: string }) => {
+		const qs = params?.category ? `?category=${params.category}` : "";
+		return fetchApi<import("~/types").StyleTemplateList>(
+			`/api/v1/style-templates${qs}`,
+		).then((data) => data.items);
+	},
+
+	get: (slug: string) =>
+		fetchApi<import("~/types").StyleTemplate>(
+			`/api/v1/style-templates/${slug}`,
+		),
+
+	create: (data: import("~/types").StyleTemplateCreatePayload) =>
+		fetchApi<import("~/types").StyleTemplate>("/api/v1/style-templates", {
+			method: "POST",
+			body: JSON.stringify(data),
+		}),
+
+	update: (slug: string, data: import("~/types").StyleTemplateUpdatePayload) =>
+		fetchApi<import("~/types").StyleTemplate>(
+			`/api/v1/style-templates/${slug}`,
+			{
+				method: "PUT",
+				body: JSON.stringify(data),
+		},
+	),
+
+	delete: (slug: string) =>
+		fetchApi<void>(`/api/v1/style-templates/${slug}`, {
+			method: "DELETE",
+		}),
+};
+
+// Export API
+export const exportApi = {
+	triggerPdf: (projectId: number) =>
+		fetchApi<ExportResponse>(`/api/v1/projects/${projectId}/export/pdf`, {
+			method: "POST",
+		}),
+
+	triggerWebtoon: (projectId: number) =>
+		fetchApi<ExportResponse>(`/api/v1/projects/${projectId}/export/webtoon`, {
+			method: "POST",
+		}),
+
+	getStatus: (projectId: number, exportId: string) =>
+		fetchApi<ExportResponse>(
+			`/api/v1/projects/${projectId}/export/${exportId}/status`,
+		),
+};
+
+// Consistency Evaluation API
+export const consistencyApi = {
+	triggerEval: (projectId: number) =>
+		fetchApi<import("~/types").ConsistencyEvalResponse>(
+			`/api/v1/projects/${projectId}/consistency-eval`,
+			{ method: "POST" },
+		),
+
+	getReport: (projectId: number) =>
+		fetchApi<import("~/types").ConsistencyReportRead>(
+			`/api/v1/projects/${projectId}/consistency-report`,
+		),
+
+	getHistory: (projectId: number, limit?: number) =>
+		fetchApi<import("~/types").ConsistencyReportRead[]>(
+			`/api/v1/projects/${projectId}/consistency-report/history${limit ? `?limit=${limit}` : ""}`,
+		),
+};
+
+export const universesApi = {
+	list: () =>
+		fetchApi<import("~/types").Universe[]>("/api/v1/universes"),
+
+	get: (id: number) =>
+		fetchApi<import("~/types").UniverseDetail>(
+			`/api/v1/universes/${id}`,
+		),
+
+	create: (data: {
+		name: string;
+		description?: string | null;
+		world_setting?: string | null;
+		style_rules?: string | null;
+		cover_image_url?: string | null;
+	}) =>
+		fetchApi<import("~/types").Universe>("/api/v1/universes", {
+			method: "POST",
+			body: JSON.stringify(data),
+		}),
+
+	update: (
+		id: number,
+		data: {
+			name?: string | null;
+			description?: string | null;
+			world_setting?: string | null;
+			style_rules?: string | null;
+			cover_image_url?: string | null;
+			is_active?: boolean | null;
+		},
+	) =>
+		fetchApi<import("~/types").Universe>(`/api/v1/universes/${id}`, {
+			method: "PUT",
+			body: JSON.stringify(data),
+		}),
+
+	addProject: (
+		universeId: number,
+		projectId: number,
+		chapterNumber?: number | null,
+		chapterTitle?: string | null,
+	) =>
+		fetchApi<import("~/types").UniverseProjectLinkRead>(
+			`/api/v1/universes/${universeId}/projects`,
+			{
+				method: "POST",
+				body: JSON.stringify({
+					project_id: projectId,
+					chapter_number: chapterNumber ?? null,
+					chapter_title: chapterTitle ?? null,
+				}),
+			},
+		),
+
+	removeProject: (universeId: number, projectId: number) =>
+		fetchApi<void>(
+			`/api/v1/universes/${universeId}/projects/${projectId}`,
+			{ method: "DELETE" },
+		),
+
+	listSharedCharacters: (universeId: number) =>
+		fetchApi<import("~/types").SharedCharacterRead[]>(
+			`/api/v1/universes/${universeId}/shared-characters`,
+		),
+
+	promoteCharacter: (universeId: number, characterId: number) =>
+		fetchApi<import("~/types").SharedCharacterRead>(
+			`/api/v1/universes/${universeId}/shared-characters`,
+			{
+				method: "POST",
+				body: JSON.stringify({ character_id: characterId }),
+			},
+		),
+
+	importCharacter: (projectId: number, sharedCharacterId: number) =>
+		fetchApi<{ id: number; name: string; project_id: number }>(
+			`/api/v1/universes/projects/${projectId}/import-character/${sharedCharacterId}`,
+			{ method: "POST" },
+		),
+
+	syncCharacter: (characterId: number) =>
+		fetchApi<import("~/types").SharedCharacterRead>(
+			`/api/v1/universes/characters/${characterId}/sync-to-universe`,
+			{ method: "POST" },
+		),
 };

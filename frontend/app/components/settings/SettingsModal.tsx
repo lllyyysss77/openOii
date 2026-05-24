@@ -137,11 +137,12 @@ export function SettingsModal() {
 		// Only send overrides for fields relevant to the current service.
 		// The backend rejects non-whitelisted override keys with 400.
 		const servicePrefixes: Record<string, string[]> = {
-			llm: ["text_", "anthropic_"],
-			image: ["image_", "enable_image_to_image"],
+			llm: ["text_", "anthropic_", "fake_text_"],
+			image: ["image_", "fake_image_", "enable_image_to_image"],
 			video: [
 				"video_",
 				"doubao_",
+				"fake_video_",
 				"enable_image_to_video",
 				"video_image_mode",
 				"video_inline_local_images",
@@ -155,10 +156,16 @@ export function SettingsModal() {
 		});
 
 		const normalizedFormState = Object.fromEntries(
-			relevantEntries.map(([key, value]) => [
-				key,
-				value === null ? null : String(value),
-			]),
+			relevantEntries
+				.map(([key, value]) => [key, value === null ? null : String(value)] as const)
+				.filter(([key, value]) => {
+					// Empty inputs in the test-connection form mean "use the current
+					// effective backend value". Sending an empty string would override
+					// env/default values and can make fake fixture probes fail.
+					if (value !== "") return true;
+					const lower = key.toLowerCase();
+					return lower.endsWith("_provider") || lower.startsWith("enable_");
+				}),
 		) as Record<string, string | null>;
 
 		setIsTestingConnection(true);
@@ -240,17 +247,17 @@ export function SettingsModal() {
 		text: {
 			icon: <SparklesIcon className="w-4 h-4" />,
 			title: "文本生成",
-			desc: "文本生成服务配置，支持 Anthropic 和 OpenAI 兼容接口",
+			desc: "文本生成服务配置，支持 Anthropic、OpenAI 兼容接口和 Fake 本地测试",
 		},
 		image: {
 			icon: <PhotoIcon className="w-4 h-4" />,
 			title: "图像服务",
-			desc: "图像生成服务配置（OpenAI 兼容接口）",
+			desc: "图像生成服务配置，支持 OpenAI 兼容接口和 Fake 本地测试",
 		},
 		video: {
 			icon: <VideoCameraIcon className="w-4 h-4" />,
 			title: "视频服务",
-			desc: "视频生成服务配置，支持 OpenAI 兼容接口和豆包",
+			desc: "视频生成服务配置，支持 OpenAI 兼容接口、豆包和 Fake 本地测试",
 		},
 	};
 
@@ -267,6 +274,13 @@ export function SettingsModal() {
 	const getVideoProvider = () => {
 		return (formState["VIDEO_PROVIDER"] ||
 			formState["video_provider"] ||
+			"openai") as string;
+	};
+
+	// 获取当前图像服务提供商
+	const getImageProvider = () => {
+		return (formState["IMAGE_PROVIDER"] ||
+			formState["image_provider"] ||
 			"openai") as string;
 	};
 
@@ -383,6 +397,31 @@ export function SettingsModal() {
 									</div>
 								</div>
 							</label>
+							<label
+								className={`
+                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
+                ${
+									textProvider === "fake"
+										? "border-accent bg-accent/10"
+										: "border-base-content/30 hover:bg-base-300"
+								}
+              `}
+							>
+								<input
+									type="radio"
+									name="TEXT_PROVIDER"
+									value="fake"
+									checked={textProvider === "fake"}
+									onChange={handleInputChange}
+									className="radio radio-accent"
+								/>
+								<div>
+									<div className="font-bold">Fake 本地测试</div>
+									<div className="text-xs text-base-content/60">
+										不调用外部文本 API，避免测试扣费
+									</div>
+								</div>
+							</label>
 						</div>
 					</div>
 				)}
@@ -409,6 +448,154 @@ export function SettingsModal() {
 						</h4>
 						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
 							{openaiItems.map(renderConfigItem)}
+						</div>
+					</div>
+				)}
+
+				{/* Fake 配置 */}
+				{textProvider === "fake" && (
+					<div className="space-y-4">
+						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
+							<SparklesIcon className="w-4 h-4" />
+							Fake 本地测试配置
+						</h4>
+						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+							{activeSection.items
+								.filter((i) => i.key.toLowerCase().startsWith("fake_text_"))
+								.map(renderConfigItem)}
+							<p className="text-xs text-base-content/60 px-1">
+								启用后生成链路不会调用外部文本生成 API。
+							</p>
+						</div>
+					</div>
+				)}
+			</div>
+		);
+	};
+
+	// 渲染图像服务配置（支持 fake 本地测试）
+	const renderImageSection = () => {
+		if (!activeSection || activeTab !== "image") return null;
+
+		const imageProvider = getImageProvider();
+		const providerItem = activeSection.items.find(
+			(i) => i.key.toLowerCase() === "image_provider",
+		);
+		const commonItems = activeSection.items.filter(
+			(i) => i.key.toLowerCase() === "enable_image_to_image",
+		);
+		const openaiItems = activeSection.items.filter(
+			(i) =>
+				i.key.toLowerCase().startsWith("image_") &&
+				i.key.toLowerCase() !== "image_provider",
+		);
+		const fakeItems = activeSection.items.filter((i) =>
+			i.key.toLowerCase().startsWith("fake_image_"),
+		);
+
+		return (
+			<div className="space-y-6">
+				<div className="flex items-center gap-2 text-sm text-info bg-info/10 px-4 py-2 rounded-lg border border-info/30">
+					<InformationCircleIcon className="w-4 h-4 shrink-0" />
+					<span>{tabConfig[activeTab]?.desc}</span>
+				</div>
+
+				{providerItem && (
+					<div className="bg-base-200 p-4 rounded-lg border-2 border-base-content/30">
+						<div className="flex items-center gap-2 mb-3">
+							<span className="font-mono font-bold text-sm">IMAGE_PROVIDER</span>
+							<span className="badge badge-primary badge-xs">必选</span>
+						</div>
+						<div className="flex gap-4">
+							<label
+								className={`
+                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
+                ${
+									imageProvider === "openai"
+										? "border-accent bg-accent/10"
+										: "border-base-content/30 hover:bg-base-300"
+								}
+              `}
+							>
+								<input
+									type="radio"
+									name="IMAGE_PROVIDER"
+									value="openai"
+									checked={imageProvider === "openai"}
+									onChange={handleInputChange}
+									className="radio radio-accent"
+								/>
+								<div>
+									<div className="font-bold">OpenAI 兼容</div>
+									<div className="text-xs text-base-content/60">
+										调用配置的图像生成接口
+									</div>
+								</div>
+							</label>
+							<label
+								className={`
+                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
+                ${
+									imageProvider === "fake"
+										? "border-accent bg-accent/10"
+										: "border-base-content/30 hover:bg-base-300"
+								}
+              `}
+							>
+								<input
+									type="radio"
+									name="IMAGE_PROVIDER"
+									value="fake"
+									checked={imageProvider === "fake"}
+									onChange={handleInputChange}
+									className="radio radio-accent"
+								/>
+								<div>
+									<div className="font-bold">Fake 本地测试</div>
+									<div className="text-xs text-base-content/60">
+										返回本地占位图，不调用外部图像 API
+									</div>
+								</div>
+							</label>
+						</div>
+					</div>
+				)}
+
+				{imageProvider === "openai" && openaiItems.length > 0 && (
+					<div className="space-y-4">
+						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
+							<PhotoIcon className="w-4 h-4" />
+							OpenAI 兼容接口配置
+						</h4>
+						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+							{openaiItems.map(renderConfigItem)}
+						</div>
+					</div>
+				)}
+
+				{imageProvider === "fake" && (
+					<div className="space-y-4">
+						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
+							<PhotoIcon className="w-4 h-4" />
+							Fake 本地测试配置
+						</h4>
+						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+							{fakeItems.map(renderConfigItem)}
+							<p className="text-xs text-base-content/60 px-1">
+								未配置固定 URL 时会返回内置 SVG 占位图。
+							</p>
+						</div>
+					</div>
+				)}
+
+				{commonItems.length > 0 && (
+					<div className="space-y-4">
+						<h4 className="font-bold text-sm flex items-center gap-2 text-base-content/70">
+							<WrenchScrewdriverIcon className="w-4 h-4" />
+							通用配置
+						</h4>
+						<div className="space-y-4 pl-4 bg-base-300/30 rounded-r-lg py-2">
+							{commonItems.map(renderConfigItem)}
 						</div>
 					</div>
 				)}
@@ -445,6 +632,9 @@ export function SettingsModal() {
 		);
 		const doubaoItems = activeSection.items.filter((i) =>
 			i.key.toLowerCase().startsWith("doubao_"),
+		);
+		const fakeItems = activeSection.items.filter((i) =>
+			i.key.toLowerCase().startsWith("fake_video_"),
 		);
 
 		return (
@@ -515,6 +705,31 @@ export function SettingsModal() {
 									</div>
 								</div>
 							</label>
+							<label
+								className={`
+                flex-1 flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
+                ${
+									videoProvider === "fake"
+										? "border-accent bg-accent/10"
+										: "border-base-content/30 hover:bg-base-300"
+								}
+              `}
+							>
+								<input
+									type="radio"
+									name="VIDEO_PROVIDER"
+									value="fake"
+									checked={videoProvider === "fake"}
+									onChange={handleInputChange}
+									className="radio radio-accent"
+								/>
+								<div>
+									<div className="font-bold">Fake 本地测试</div>
+									<div className="text-xs text-base-content/60">
+										使用本地视频素材，不调用外部视频 API
+									</div>
+								</div>
+							</label>
 						</div>
 					</div>
 				)}
@@ -545,6 +760,19 @@ export function SettingsModal() {
 					</div>
 				)}
 
+				{/* Fake 配置 */}
+				{videoProvider === "fake" && fakeItems.length > 0 && (
+					<div className="space-y-4">
+						<h4 className="font-bold text-sm flex items-center gap-2 text-accent">
+							<VideoCameraIcon className="w-4 h-4" />
+							Fake 本地测试配置
+						</h4>
+						<div className="space-y-4 pl-4 bg-accent/5 rounded-r-lg py-2">
+							{fakeItems.map(renderConfigItem)}
+						</div>
+					</div>
+				)}
+
 				{/* 通用配置 */}
 				{commonItems.length > 0 && (
 					<div className="space-y-4">
@@ -563,7 +791,12 @@ export function SettingsModal() {
 
 	// 渲染普通配置项列表
 	const renderNormalSection = () => {
-		if (!activeSection || activeTab === "video" || activeTab === "text")
+		if (
+			!activeSection ||
+			activeTab === "video" ||
+			activeTab === "text" ||
+			activeTab === "image"
+		)
 			return null;
 
 		return (
@@ -673,9 +906,11 @@ export function SettingsModal() {
 						<div className="flex-1 overflow-y-auto p-6">
 							{activeTab === "text"
 								? renderTextSection()
-								: activeTab === "video"
-									? renderVideoSection()
-									: renderNormalSection()}
+								: activeTab === "image"
+									? renderImageSection()
+									: activeTab === "video"
+										? renderVideoSection()
+										: renderNormalSection()}
 						</div>
 
 						{/* 底部操作栏 */}
@@ -801,27 +1036,47 @@ function getConfigDescription(key: string): string {
 
 		// 文本生成服务
 		TEXT_PROVIDER:
-			"文本生成服务提供商：anthropic（Claude）/ openai（OpenAI 兼容）",
+			"文本生成服务提供商：anthropic（Claude）/ openai（OpenAI 兼容）/ fake（本地测试，不调用外部 API）",
+		FAKE_TEXT_RESPONSE: "Fake 文本 Provider 固定返回内容（可选）",
 		TEXT_BASE_URL: "文本生成服务地址（OpenAI 兼容接口）",
 		TEXT_API_KEY: "文本生成 API 密钥（OpenAI 兼容）",
 		TEXT_MODEL: "文本生成模型名称（OpenAI 兼容），如 deepseek-v4-flash",
 		TEXT_ENDPOINT: "文本生成 API 端点路径（OpenAI 兼容）",
+		TEXT_ENABLE_THINKING:
+			"是否向支持推理开关的文本模型显式传递 thinking 配置；留空表示由模型/服务默认决定。",
 
 		// 图像服务
+		IMAGE_PROVIDER:
+			"图像生成服务提供商：openai（OpenAI 兼容）/ fake（本地测试，不调用外部 API）",
 		IMAGE_BASE_URL: "图像生成服务地址（OpenAI 兼容接口）",
 		IMAGE_API_KEY: "图像生成 API 密钥",
 		IMAGE_MODEL: "图像生成模型名称，如 dall-e-3",
 		IMAGE_ENDPOINT: "图像生成 API 端点路径",
 		ENABLE_IMAGE_TO_IMAGE: "是否启用图生图（I2I）功能",
+		FAKE_IMAGE_FIXTURE_URL:
+			"Fake 图像 Provider 固定返回的图片 URL（可选）；留空时使用后端内置本地 SVG 占位图，不调用外部图像 API。",
+		CRITIQUE_ENABLED:
+			"是否启用 Critic 质量审查闭环；开启后会审查角色图/分镜图，不达标时触发重生成。",
+		CRITIQUE_SCORE_THRESHOLD:
+			"Critic 质量分阈值（0-10）；低于该分数视为不达标并进入重生成逻辑。",
+		CRITIQUE_MAX_ROUNDS:
+			"Critic 最多重试轮数；达到上限后为避免卡死会继续后续流程。",
+		OUTLINE_ENABLED:
+			"是否启用故事大纲审批流程；开启后先生成大纲并等待确认，再继续角色和分镜规划。",
 
 		// 视频服务
-		VIDEO_PROVIDER: "视频服务提供商：openai（OpenAI 兼容）/ doubao（豆包）",
+		VIDEO_PROVIDER:
+			"视频服务提供商：openai（OpenAI 兼容）/ doubao（豆包）/ fake（本地测试）",
 		VIDEO_BASE_URL: "视频生成服务地址（OpenAI 兼容接口）",
 		VIDEO_API_KEY: "视频生成 API 密钥",
 		VIDEO_MODEL: "视频生成模型名称",
 		VIDEO_ENDPOINT: "视频生成 API 端点路径",
 		VIDEO_MODE: "视频生成模式：text（文生视频）或 image（图生视频）",
 		ENABLE_IMAGE_TO_VIDEO: "是否启用图生视频（I2V）功能",
+		FAKE_VIDEO_FIXTURE_URL:
+			"Fake 视频 Provider 固定返回的视频 URL；推荐使用 /static/videos/*.mp4，本地测试不调用外部视频 API。",
+		FAKE_VIDEO_FIXTURE_PATH:
+			"Fake 视频 Provider 本地素材文件路径；会复制到后端 static/videos 后返回本地 URL。",
 
 		// 豆包视频
 		DOUBAO_API_KEY: "豆包 API 密钥（火山引擎 ARK_API_KEY）",
@@ -832,6 +1087,21 @@ function getConfigDescription(key: string): string {
 		VIDEO_IMAGE_MODE:
 			"图生视频模式：first_frame（仅首帧）/ reference（拼接参考图）",
 		VIDEO_INLINE_LOCAL_IMAGES: "未配置 PUBLIC_BASE_URL 时是否内联本地图片",
+
+		// TTS / BGM
+		TTS_ENABLED: "是否启用 TTS 配音（Edge TTS）；关闭后只生成画面/视频，不合成语音。",
+		TTS_DEFAULT_VOICE:
+			"默认 TTS 语音名称，例如 zh-CN-XiaoxiaoNeural；用于分镜对白配音。",
+		BGM_ENABLED: "是否启用背景音乐合成；关闭后最终视频不叠加 BGM。",
+		BGM_VOLUME: "背景音乐音量，范围 0-1；数值越大 BGM 越响。",
+		TTS_VOLUME: "TTS 人声音量，范围 0-1；数值越大对白越响。",
+		BGM_DIRECTORY: "BGM 音频文件目录，相对于后端 app 目录。",
+
+		// 思考链
+		THINKING_CHAIN_ENABLED:
+			"是否向前端推送 Agent 思考链/阶段说明；关闭可减少运行时消息噪音。",
+		THINKING_CHAIN_DETAIL_LEVEL:
+			"思考链详细级别：minimal 仅关键结论，normal 含审查阶段，verbose 展示更多规划/推理过程。",
 
 		// 其他
 		REQUEST_TIMEOUT_S: "HTTP 请求超时时间（秒）",

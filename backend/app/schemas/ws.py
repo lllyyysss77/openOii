@@ -4,7 +4,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .project import CharacterRead, RecoverySummaryRead, ShotRead
+from .project import (
+    CharacterRead,
+    ProjectProviderSettingsRead,
+    RecoverySummaryRead,
+    ShotRead,
+    StoryOutlineRead,
+)
 
 
 WsEventType = Literal[
@@ -15,6 +21,7 @@ WsEventType = Literal[
     "run_started",
     "run_progress",
     "run_message",
+    "agent_thinking",
     "run_completed",
     "run_failed",
     "run_awaiting_confirm",
@@ -26,8 +33,18 @@ WsEventType = Literal[
     "shot_created",
     "shot_updated",
     "shot_deleted",
+    # Kept for backward compatibility; current outline writes usually emit
+    # project_updated, but stale clients/tests may still send outline_updated.
+    "outline_updated",
     "project_updated",
     "data_cleared",
+    "critique_result",
+    "bible_updated",
+    "version_created",
+    "version_rollback",
+    "audio_generated",
+    "export_completed",
+    "consistency_eval_completed",
 ]
 
 
@@ -113,6 +130,13 @@ class ShotDeletedEventData(BaseModel):
     shot_id: int
 
 
+class OutlineUpdatedEventData(BaseModel):
+    project_id: int
+    story_outline: StoryOutlineRead | None = None
+    visual_bible: str | None = None
+    outline_approved: bool = False
+
+
 class RunAwaitingConfirmEventData(BaseModel):
     run_id: int
     project_id: int | None = None
@@ -128,6 +152,8 @@ class RunAwaitingConfirmEventData(BaseModel):
     next_step: str | None = None
     question: str | None = None
     auto_mode: bool | None = None
+    story_outline: StoryOutlineRead | None = None
+    visual_bible: str | None = None
 
 
 class RunConfirmedEventData(BaseModel):
@@ -169,11 +195,70 @@ class ProjectUpdatedPayload(BaseModel):
     character_hints: list[str] | None = None
     creation_mode: str | None = None
     reference_images: list[str] | None = None
+    exports: list[str] | None = None
+    provider_settings: ProjectProviderSettingsRead | None = None
+    universe_id: int | None = None
+    chapter_number: int | None = None
+    chapter_title: str | None = None
+    story_outline: StoryOutlineRead | None = None
+    visual_bible: str | None = None
+    outline_approved: bool | None = None
     blocking_clips: list[BlockingClipPayload] | None = None
 
 
 class ProjectUpdatedEventData(BaseModel):
     project: ProjectUpdatedPayload
+
+
+class CritiqueResultEventData(BaseModel):
+    score: float = Field(ge=0.0, le=10.0)
+    dimensions: dict[str, int] = Field(default_factory=dict)
+    issues: list[str] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+    entity_type: str = ""  # "character" or "shot"
+    entity_id: int = 0
+    will_regenerate: bool = False
+
+
+class BibleUpdatedEventData(BaseModel):
+    character_id: int
+    visual_notes: bool = False  # whether visual_notes was updated
+    reference_images_count: int = 0
+    has_embedding: bool = False
+
+
+class AudioGeneratedEventData(BaseModel):
+    shot_id: int
+    tts_url: str | None = None
+    bgm_type: str | None = None
+    duration: float | None = None
+
+
+class AgentThinkingEventData(BaseModel):
+    agent: str
+    phase: Literal["reasoning", "decision", "planning", "reviewing"]
+    content: str
+    details: str | None = None
+
+
+class VersionCreatedEventData(BaseModel):
+    entity_type: Literal["character", "shot"]
+    entity_id: int
+    version: int
+    trigger: str
+
+
+class VersionRollbackEventData(BaseModel):
+    entity_type: Literal["character", "shot"]
+    entity_id: int
+    from_version: int
+    to_version: int
+
+
+class ConsistencyEvalCompletedEventData(BaseModel):
+    project_id: int
+    overall_score: float = Field(ge=0.0, le=100.0)
+    character_count: int = 0
 
 
 class WsEvent(BaseModel):

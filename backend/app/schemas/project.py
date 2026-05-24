@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-TextProviderKey = Literal["anthropic", "openai"]
-ImageProviderKey = Literal["openai"]
+TextProviderKey = Literal["anthropic", "openai", "fake"]
+ImageProviderKey = Literal["openai", "fake"]
 VideoProviderKey = Literal["openai", "doubao", "fake"]
 
 
@@ -52,6 +52,35 @@ class ProviderResolution(BaseModel):
         }
 
 
+class StoryOutlineAct(BaseModel):
+    act: int
+    title: str
+    summary: str
+
+
+class StoryOutlineRead(BaseModel):
+    logline: str = ""
+    genre: list[str] = Field(default_factory=list)
+    themes: list[str] = Field(default_factory=list)
+    setting: str = ""
+    tone: str = ""
+    acts: list[StoryOutlineAct] = Field(default_factory=list)
+    emotional_arc: str = ""
+
+
+class StoryOutlineUpdate(BaseModel):
+    logline: str | None = None
+    genre: list[str] | None = None
+    themes: list[str] | None = None
+    setting: str | None = None
+    tone: str | None = None
+    acts: list[StoryOutlineAct] | None = None
+    emotional_arc: str | None = None
+    visual_bible: str | None = None
+    summary: str | None = None
+    outline_approved: bool | None = None
+
+
 class ProjectCreate(BaseModel):
     title: str = Field(min_length=1)
     story: str | None = None
@@ -61,9 +90,13 @@ class ProjectCreate(BaseModel):
     character_hints: list[str] | None = None
     creation_mode: str | None = None
     reference_images: list[str] | None = None
+    exports: list[str] | None = None
     text_provider_override: TextProviderKey | None = None
     image_provider_override: ImageProviderKey | None = None
     video_provider_override: VideoProviderKey | None = None
+    universe_id: int | None = None
+    chapter_number: int | None = None
+    chapter_title: str | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -75,9 +108,13 @@ class ProjectUpdate(BaseModel):
     character_hints: list[str] | None = None
     creation_mode: str | None = None
     reference_images: list[str] | None = None
+    exports: list[str] | None = None
     text_provider_override: TextProviderKey | None = None
     image_provider_override: ImageProviderKey | None = None
     video_provider_override: VideoProviderKey | None = None
+    universe_id: int | None = None
+    chapter_number: int | None = None
+    chapter_title: str | None = None
 
 
 class ProjectBatchDeleteRequest(BaseModel):
@@ -92,15 +129,22 @@ class ProjectRead(BaseModel):
     story: str | None
     style: str | None
     summary: str | None
+    story_outline: StoryOutlineRead | None = None
+    visual_bible: str | None = None
+    outline_approved: bool = False
     video_url: str | None
     status: str
     target_shot_count: int | None = None
     character_hints: list[str] = Field(default_factory=list)
     creation_mode: str | None = None
     reference_images: list[str] = Field(default_factory=list)
+    exports: list[str] = Field(default_factory=list)
     provider_settings: ProjectProviderSettingsRead
     created_at: datetime
     updated_at: datetime
+    universe_id: int | None = None
+    chapter_number: int | None = None
+    chapter_title: str | None = None
 
 
 class ProjectListRead(BaseModel):
@@ -116,12 +160,32 @@ class CharacterRead(BaseModel):
     name: str
     description: str | None
     image_url: str | None
+    reference_images: list[str] = Field(default_factory=list)
+    has_embedding: bool = False
+    visual_notes: str | None = None
     approval_state: Literal["draft", "approved", "superseded"]
     approval_version: int
     approved_at: datetime | None
     approved_name: str | None
     approved_description: str | None
     approved_image_url: str | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _compute_has_embedding(cls, data: object) -> object:
+        if isinstance(data, dict):
+            if "has_embedding" not in data and "face_embedding" in data:
+                data["has_embedding"] = bool(data.get("face_embedding"))
+        # SQLModel object — compute from attribute
+        elif hasattr(data, "face_embedding"):
+            if not isinstance(data, dict):
+                # We need to set has_embedding based on face_embedding
+                # from_attributes will pick it up if we pre-set it
+                try:
+                    data.__dict__["has_embedding"] = bool(getattr(data, "face_embedding", None))
+                except (AttributeError, TypeError):
+                    pass
+        return data
 
 
 class ShotRead(BaseModel):
@@ -144,6 +208,8 @@ class ShotRead(BaseModel):
     lighting: str | None = None
     dialogue: str | None = None
     sfx: str | None = None
+    tts_url: str | None = None
+    bgm_type: str | None = None
     seed: int | None = None
     character_ids: list[int]
     approval_state: Literal["draft", "approved", "superseded"]
@@ -186,6 +252,8 @@ class CharacterUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1)
     description: str | None = None
     image_url: str | None = None
+    visual_notes: str | None = None
+    reference_images: list[str] | None = None
 
 
 class RegenerateRequest(BaseModel):
@@ -304,3 +372,29 @@ class AssetRead(BaseModel):
 class AssetListRead(BaseModel):
     items: list[AssetRead]
     total: int
+
+
+class CharacterBibleRead(BaseModel):
+    """角色圣经 — visual_notes + reference_images + embedding 状态 + 相似度"""
+
+    character_id: int
+    name: str
+    description: str | None
+    visual_notes: str | None
+    reference_images: list[str] = Field(default_factory=list)
+    has_embedding: bool = False
+    similarity_scores: list[dict[str, object]] = Field(default_factory=list)
+
+
+class CharacterBibleUpdate(BaseModel):
+    """更新角色圣经"""
+
+    visual_notes: str | None = None
+    reference_images: list[str] | None = None
+
+
+class ReferenceImageCreate(BaseModel):
+    """添加参考图 URL"""
+
+    image_url: str = Field(min_length=1)
+    label: str | None = None

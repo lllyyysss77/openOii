@@ -11,11 +11,21 @@ from tests.factories import create_project, create_run
 
 
 class FakeLLM:
-    def __init__(self, response_text: str):
-        self.response_text = response_text
+    def __init__(self, response_text: str | list[str]):
+        if isinstance(response_text, list):
+            self.responses = list(response_text)
+        else:
+            self.responses = [response_text]
+        self.calls: list[dict] = []
+
+    @property
+    def response_text(self) -> str:
+        return self.responses[-1] if self.responses else "{}"
 
     async def stream(self, **kwargs):
-        yield {"type": "final", "response": LLMResponse(text=self.response_text, tool_calls=[], raw=None)}
+        self.calls.append(kwargs)
+        text = self.responses.pop(0) if len(self.responses) > 1 else self.responses[0]
+        yield {"type": "final", "response": LLMResponse(text=text, tool_calls=[], raw=None)}
 
 
 class FakeImageService:
