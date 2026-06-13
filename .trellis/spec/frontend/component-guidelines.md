@@ -147,6 +147,8 @@ Buttons own their `loading` UI. Pages own their page-level `LoadingOverlay`. Don
 
 - Use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`).
 - Touch targets must include the `touch-target` utility (see `Button.tsx`) so they meet the 44×44 minimum.
+- For horizontal cards or header rows, put `min-w-0` on the flex container and the truncating child. A `truncate` span without a `min-w-0` ancestor can force mobile overflow.
+- Fixed or absolute toolbars must be constrained to the viewport (`max-w-[calc(100vw-...)]`) and either wrap or scroll on narrow screens. Verify at 390px and 768px widths after changes.
 
 ### Dark / light theme
 
@@ -237,6 +239,7 @@ Required tests: `pnpm exec vitest run app/hooks/useCanvasLayout.test.ts app/comp
 
 - Buttons and links use semantic elements (`<button>`, `<a>`), never `<div onClick>`.
 - Iconic-only buttons need `aria-label`.
+- Buttons that hide their text label on mobile with responsive utilities also need an `aria-label`; do not rely on text that is `hidden sm:inline` for the mobile accessible name.
 - Modals announce themselves via `<dialog>`.
 - Color is never the only signal of state — pair it with text or icon (e.g., `<ErrorMessage>` includes both icon and copy).
 
