@@ -26,14 +26,18 @@ DEFAULT_FAKE_VIDEO_FILENAME = "fake_provider_clip.mp4"
 FAKE_VIDEO_COLORS = ("0x111827", "0x1e1b4b", "0x422006", "0x052e16", "0x3b0764", "0x0f172a")
 
 
-def _video_slug(prompt: str, *, prefix: str = "fake_video") -> str:
+def _video_slug(prompt: str, *, prefix: str = "fake_video_v2") -> str:
     digest = hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:10]
     return f"{prefix}_{digest}.mp4"
 
 
 def _prompt_label(prompt: str) -> str:
     compact = " ".join(prompt.split())
-    return (compact or "local fake video")[:36]
+    ascii_label = compact.encode("ascii", errors="ignore").decode("ascii").strip()
+    if ascii_label and sum(1 for ch in ascii_label if ch.isalpha()) >= 3:
+        return ascii_label[:36]
+    digest = hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:8]
+    return f"local prompt {digest}"
 
 
 class FakeVideoService:

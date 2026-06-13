@@ -15,6 +15,7 @@ import {
 import { getStaticUrl } from "~/services/api";
 import { SvgIcon } from "~/components/ui/SvgIcon";
 import { useDomSize, getShapeSize } from "~/hooks/useDomSize";
+import { canvasEvents } from "../canvasEvents";
 
 const PLACEHOLDER_ICON = (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 opacity-40">
@@ -103,17 +104,22 @@ export class VideoSectionShapeUtil extends ShapeUtil<VideoSectionShape> {
         >
           {videoUrl ? (
             <div className="space-y-2">
-              <video
-                className="w-full rounded-lg bg-neutral"
-                src={videoUrl}
-                controls
+              <div
+                className="relative w-full aspect-video rounded-xl bg-gradient-to-br from-base-300 to-base-200 cursor-pointer group"
+                onClick={() => canvasEvents.emit("preview-video", { src: videoUrl, title })}
                 onPointerDown={(e) => e.stopPropagation()}
-                aria-label={title}
               >
-                <track kind="captions" label="中文" srcLang="zh" default
-                  src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${title || "最终视频"}`)}`}
-                />
-              </video>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full bg-primary/90 flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:bg-primary transition-all">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-primary-content ml-1">
+                      <path d="M8 5.14v14l11-7-11-7Z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-base-content/40 to-transparent rounded-b-xl">
+                  <p className="text-sm font-medium text-base-100 truncate">{title}</p>
+                </div>
+              </div>
               <div className="flex gap-1.5 justify-end items-center">
                 <SvgIcon name="volume-2" size={12} className="text-base-content/40" />
                 <a

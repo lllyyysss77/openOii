@@ -384,6 +384,18 @@ export const assetsApi = {
 		),
 	delete: (id: number) =>
 		fetchApi<void>(`/api/v1/assets/${id}`, { method: "DELETE" }),
+
+	uploadImage: async (file: File) => {
+		const formData = new FormData();
+		formData.append("file", file);
+		const baseUrl = getApiBase();
+		const res = await fetch(`${baseUrl}/api/v1/assets/upload-image`, {
+			method: "POST",
+			body: formData,
+		});
+		if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+		return res.json() as Promise<{ url: string }>;
+	},
 };
 
 // Config API

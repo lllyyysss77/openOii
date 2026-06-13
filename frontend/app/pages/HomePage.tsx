@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { lazy, Suspense, useState, useCallback, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { projectsApi } from "~/services/api";
@@ -11,9 +11,18 @@ import {
 	PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { TopBar } from "~/components/layout/TopBar";
-import { AssetDrawer } from "~/components/panels/AssetDrawer";
-import { HistoryDrawer } from "~/components/panels/HistoryDrawer";
 import { SvgIcon } from "~/components/ui/SvgIcon";
+
+const AssetDrawer = lazy(() =>
+	import("~/components/panels/AssetDrawer").then((m) => ({
+		default: m.AssetDrawer,
+	})),
+);
+const HistoryDrawer = lazy(() =>
+	import("~/components/panels/HistoryDrawer").then((m) => ({
+		default: m.HistoryDrawer,
+	})),
+);
 
 const STYLE_CATEGORIES = [
 	{
@@ -51,6 +60,7 @@ export function HomePage() {
 	const queryClient = useQueryClient();
 	const [story, setStory] = useState("");
 	const [style, setStyle] = useState(DEFAULT_STYLE);
+	const [creationMode, setCreationMode] = useState<"review" | "quick">("review");
 	const [shotCount, setShotCount] = useState<number | undefined>(undefined);
 	const [characterHints, setCharacterHints] = useState<string[]>([""]);
 	const [showAdvanced, setShowAdvanced] = useState(false);
@@ -106,6 +116,7 @@ export function HomePage() {
 			style,
 			target_shot_count: shotCount,
 			character_hints: hints.length > 0 ? hints : undefined,
+			creation_mode: creationMode,
 			text_provider_override: null,
 			image_provider_override: null,
 			video_provider_override: null,
@@ -199,12 +210,20 @@ export function HomePage() {
 				assetsOpen={assetsOpen}
 				historyOpen={historyOpen}
 			/>
-			<AssetDrawer open={assetsOpen} onClose={() => setAssetsOpen(false)} />
-			<HistoryDrawer
-				open={historyOpen}
-				onClose={() => setHistoryOpen(false)}
-				onNavigate={(id) => navigate(`/project/${id}`)}
-			/>
+			{assetsOpen && (
+				<Suspense fallback={null}>
+					<AssetDrawer open onClose={() => setAssetsOpen(false)} />
+				</Suspense>
+			)}
+			{historyOpen && (
+				<Suspense fallback={null}>
+					<HistoryDrawer
+						open
+						onClose={() => setHistoryOpen(false)}
+						onNavigate={(id) => navigate(`/project/${id}`)}
+					/>
+				</Suspense>
+			)}
 			<div className="flex flex-col items-center justify-center p-4 sm:p-6 halftone-bg-accent min-h-[calc(100vh-40px)]">
 				<main className="w-full max-w-2xl mx-auto">
 					<div className="text-center mb-8 animate-doodle-pop">
@@ -356,6 +375,34 @@ export function HomePage() {
 										)}
 									</div>
 								))}
+								<div className="flex items-center gap-1.5 flex-wrap pt-1">
+									<span className="text-[10px] text-base-content/30 font-bold uppercase tracking-wider w-14 flex-shrink-0">
+										创作模式
+									</span>
+									<div className="flex gap-1 flex-wrap items-center">
+										{[
+											{ value: "review", label: "精细审阅", icon: "check" },
+											{ value: "quick", label: "快速生成", icon: "zap" },
+										].map((mode) => (
+											<button
+												key={mode.value}
+												type="button"
+												className={`px-2 py-0.5 rounded-full border-2 text-[11px] font-bold transition-all duration-150 inline-flex items-center gap-1 ${
+													creationMode === mode.value
+														? "border-primary bg-primary/10 text-primary -translate-y-0.5 shadow-comic"
+														: "border-base-content/10 bg-base-200/50 text-base-content/50 hover:border-primary/30 hover:-translate-y-0.5"
+												}`}
+												onClick={() =>
+													setCreationMode(mode.value as "review" | "quick")
+												}
+												aria-pressed={creationMode === mode.value}
+											>
+												<SvgIcon name={mode.icon as "check" | "zap"} size={11} />
+												{mode.label}
+											</button>
+										))}
+									</div>
+								</div>
 								<div className="flex items-center justify-end">
 									<button
 										type="button"

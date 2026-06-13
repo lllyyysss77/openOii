@@ -722,8 +722,7 @@ class PlanAgent(BaseAgent):
             await self.send_shot_event(ctx, shot, "shot_created")
         await ctx.session.commit()
 
-        raw_characters = data.get("characters") or []
-        char_count = len(raw_characters) if isinstance(raw_characters, list) else 0
+        char_count = len(characters)
 
         # Thinking: decision phase — shots generated
         await self.send_thinking(

@@ -17,6 +17,20 @@ from app.services.file_cleaner import STATIC_DIR
 
 logger = logging.getLogger(__name__)
 
+IMAGE_CONTENT_TYPE_EXTENSIONS = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+
+DATA_IMAGE_URL_RE = re.compile(
+    r"data:(image/(?:png|jpe?g|webp|gif));base64,[A-Za-z0-9+/=\s]+",
+    re.IGNORECASE,
+)
+MARKDOWN_IMAGE_TARGET_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)")
+
 
 class ImageService:
     """图像生成服务（支持多种 API 格式）"""
@@ -64,28 +78,100 @@ class ImageService:
             return candidate
         if candidate.startswith(("http://", "https://")):
             return self._sanitize_url(candidate)
+        markdown_match = MARKDOWN_IMAGE_TARGET_RE.search(candidate)
+        if markdown_match:
+            target = self._sanitize_url(markdown_match.group(1))
+            if target.startswith(("http://", "https://", "data:")):
+                return target
+        data_match = DATA_IMAGE_URL_RE.search(candidate)
+        if data_match:
+            return self._sanitize_url(data_match.group(0).replace("\n", ""))
         urls = re.findall(r"https?://[^\s<>\"]+", candidate)
         if urls:
             return self._sanitize_url(urls[0])
         return None
+
+    def _extract_url_from_payload_item(self, item: Any) -> str | None:
+        if not isinstance(item, dict):
+            return None
+
+        for key in ("url", "image_url", "output_url", "output_image"):
+            value = item.get(key)
+            if isinstance(value, str):
+                extracted = self._extract_url_from_text(value)
+                if extracted:
+                    return extracted
+            if isinstance(value, dict):
+                nested_url = value.get("url")
+                if isinstance(nested_url, str):
+                    extracted = self._extract_url_from_text(nested_url)
+                    if extracted:
+                        return extracted
+
+        b64_json = item.get("b64_json")
+        if isinstance(b64_json, str) and b64_json:
+            return f"data:image/png;base64,{b64_json}"
+
+        return None
+
+    def _extract_url_from_payload(self, payload: Any) -> str | None:
+        if isinstance(payload, str):
+            return self._extract_url_from_text(payload)
+        if not isinstance(payload, dict):
+            return None
+
+        direct = self._extract_url_from_payload_item(payload)
+        if direct:
+            return direct
+
+        for key in ("data", "images", "output_images", "outputs"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                for item in value:
+                    extracted = self._extract_url_from_payload(item)
+                    if extracted:
+                        return extracted
+            elif isinstance(value, (dict, str)):
+                extracted = self._extract_url_from_payload(value)
+                if extracted:
+                    return extracted
+
+        return None
+
+    async def _cache_data_url_image(self, url: str) -> str:
+        header, separator, encoded = url.partition(",")
+        if not separator:
+            return url
+
+        content_type = header.removeprefix("data:").split(";")[0].strip().lower()
+        ext = IMAGE_CONTENT_TYPE_EXTENSIONS.get(content_type)
+        if not ext:
+            return url
+
+        try:
+            content = base64.b64decode("".join(encoded.split()), validate=True)
+        except Exception as exc:
+            logger.warning("Failed to decode generated data URL image: %s", exc)
+            return url
+
+        static_dir = STATIC_DIR / "images"
+        static_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"{uuid4().hex}{ext}"
+        save_path = static_dir / filename
+        save_path.write_bytes(content)
+        return f"/static/images/{filename}"
 
     async def cache_external_image(self, url: str) -> str:
         """缓存外部图片到本地静态目录，返回本地 URL。
 
         仅处理 http(s) URL，失败时返回原始 URL。
         """
-        if not url or url.startswith(("/static/", "data:")):
+        if not url or url.startswith("/static/"):
             return url
+        if url.startswith("data:"):
+            return await self._cache_data_url_image(url)
         if not url.startswith(("http://", "https://")):
             return url
-
-        content_type_map = {
-            "image/png": ".png",
-            "image/jpeg": ".jpg",
-            "image/jpg": ".jpg",
-            "image/webp": ".webp",
-            "image/gif": ".gif",
-        }
 
         try:
             client = await self._get_cache_client()
@@ -95,7 +181,7 @@ class ImageService:
             headers = res.headers
 
             content_type = headers.get("Content-Type", "").split(";")[0].strip().lower()
-            ext = content_type_map.get(content_type)
+            ext = IMAGE_CONTENT_TYPE_EXTENSIONS.get(content_type)
             if not ext:
                 suffix = Path(urlparse(url).path).suffix
                 ext = suffix if suffix else ".png"
@@ -292,6 +378,9 @@ class ImageService:
                                 chunk = json.loads(data_str)
                                 if "error" in chunk:
                                     raise RuntimeError(f"Stream error: {chunk['error']}")
+                                extracted = self._extract_url_from_payload(chunk)
+                                if extracted:
+                                    collected_content += extracted
                                 choices = chunk.get("choices", [])
                                 if choices:
                                     delta = choices[0].get("delta", {})
@@ -421,12 +510,9 @@ class ImageService:
                         **kwargs,
                     }
                     data = await self._post_json_with_retry(url, payload)
-                    items = data.get("data") or []
-                    if isinstance(items, list) and items:
-                        first = items[0] if isinstance(items[0], dict) else {}
-                        result_url = first.get("url")
-                        if isinstance(result_url, str) and result_url:
-                            return self._sanitize_url(result_url)
+                    extracted = self._extract_url_from_payload(data)
+                    if extracted:
+                        return extracted
 
                     raise RuntimeError(f"Image API response missing URL: {data}")
             except Exception as exc:
@@ -455,11 +541,8 @@ class ImageService:
 
         # DALL-E 风格（非流式）
         data = await self.generate(prompt=prompt, size=size, response_format="url", **kwargs)
-        items = data.get("data") or []
-        if isinstance(items, list) and items:
-            first = items[0] if isinstance(items[0], dict) else {}
-            result_url = first.get("url")
-            if isinstance(result_url, str) and result_url:
-                return self._sanitize_url(result_url)
+        extracted = self._extract_url_from_payload(data)
+        if extracted:
+            return extracted
 
         raise RuntimeError(f"Image API response missing URL: {data}")

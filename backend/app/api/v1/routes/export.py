@@ -56,6 +56,25 @@ async def _get_export_status(export_id: str) -> ExportResponse | None:
     return _export_status_cache.get(export_id)
 
 
+async def _append_project_export(
+    session: AsyncSession,
+    project_id: int,
+    download_url: str,
+) -> None:
+    stmt = select(Project).where(Project.id == project_id).with_for_update()
+    res = await session.execute(stmt)
+    project = res.scalar_one_or_none()
+    if project is None:
+        return
+
+    exports = list(project.exports or [])
+    if download_url not in exports:
+        exports.append(download_url)
+        project.exports = exports
+        session.add(project)
+    await session.commit()
+
+
 async def _run_export_task(
     project_id: int,
     export_id: str,
@@ -113,13 +132,7 @@ async def _run_export_task(
 
         # 更新项目 exports 列表
         async with async_session_maker() as session:
-            project = await session.get(Project, project_id)
-            if project:
-                exports = project.exports or []
-                exports.append(download_url)
-                project.exports = exports
-                session.add(project)
-                await session.commit()
+            await _append_project_export(session, project_id, download_url)
 
         # WebSocket 通知
         from app.schemas.export import ExportCompletedEventData

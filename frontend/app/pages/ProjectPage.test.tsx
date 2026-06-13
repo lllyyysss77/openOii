@@ -10,10 +10,16 @@ import { toast } from '~/utils/toast';
 
 const invalidateQueries = vi.fn();
 const setSearchParams = vi.fn();
+let currentRouteProjectId = '9';
 let currentSearchParams = new URLSearchParams();
 let projectQueryState: { isLoading: boolean; error: Error | null } = {
   isLoading: false,
   error: null,
+};
+let resourceQueryState = {
+  charactersLoading: false,
+  shotsLoading: false,
+  messagesLoading: false,
 };
 const projectData: Project = {
   id: 9,
@@ -153,6 +159,7 @@ const storeState: {
   setProjectStoryOutline: ReturnType<typeof vi.fn>;
   setProjectVisualBible: ReturnType<typeof vi.fn>;
   setProjectOutlineApproved: ReturnType<typeof vi.fn>;
+  setBlockingClips: ReturnType<typeof vi.fn>;
 } = {
   isGenerating: false,
   progress: 0,
@@ -211,6 +218,7 @@ const storeState: {
   setProjectStoryOutline: vi.fn(),
   setProjectVisualBible: vi.fn(),
   setProjectOutlineApproved: vi.fn(),
+  setBlockingClips: vi.fn(),
 };
 const mutateSpy = vi.fn();
 const sendMock = vi.fn();
@@ -221,7 +229,7 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     Link: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    useParams: () => ({ id: '9' }),
+    useParams: () => ({ id: currentRouteProjectId }),
     useSearchParams: () => [currentSearchParams, setSearchParams],
     useNavigate: () => vi.fn(),
   };
@@ -248,15 +256,27 @@ vi.mock('@tanstack/react-query', () => ({
     }
 
     if (queryKey[0] === 'characters') {
-      return { data: emptyCharacters, isLoading: false, error: null };
+      return {
+        data: resourceQueryState.charactersLoading ? undefined : emptyCharacters,
+        isLoading: resourceQueryState.charactersLoading,
+        error: null,
+      };
     }
 
     if (queryKey[0] === 'shots') {
-      return { data: emptyShots, isLoading: false, error: null };
+      return {
+        data: resourceQueryState.shotsLoading ? undefined : emptyShots,
+        isLoading: resourceQueryState.shotsLoading,
+        error: null,
+      };
     }
 
     if (queryKey[0] === 'messages') {
-      return { data: emptyMessages, isLoading: false, error: null };
+      return {
+        data: resourceQueryState.messagesLoading ? undefined : emptyMessages,
+        isLoading: resourceQueryState.messagesLoading,
+        error: null,
+      };
     }
 
     return { data: undefined, isLoading: false, error: null };
@@ -405,8 +425,14 @@ describe('ProjectPage live hydration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mutationPendingStates = [];
+    currentRouteProjectId = '9';
     currentSearchParams = new URLSearchParams();
     projectQueryState = { isLoading: false, error: null };
+    resourceQueryState = {
+      charactersLoading: false,
+      shotsLoading: false,
+      messagesLoading: false,
+    };
     currentProjectData = projectData;
     storeState.isGenerating = true;
     storeState.progress = 0.35;
@@ -623,6 +649,61 @@ describe('ProjectPage live hydration', () => {
 
     expect(screen.getByText('正在加载项目...')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-panel')).not.toBeInTheDocument();
+  });
+
+  it('keeps the loading page while project workspace resources are loading', () => {
+    resourceQueryState = {
+      charactersLoading: true,
+      shotsLoading: false,
+      messagesLoading: false,
+    };
+
+    render(<ProjectPage />);
+
+    expect(screen.getByText('正在加载项目...')).toBeInTheDocument();
+    expect(screen.queryByTestId('stage-view')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chat-panel')).not.toBeInTheDocument();
+  });
+
+  it('clears project-scoped canvas state when route project changes', async () => {
+    const { rerender } = render(<ProjectPage />);
+
+    await waitFor(() => {
+      expect(storeState.setProjectTitle).toHaveBeenCalledWith('Realtime Story');
+    });
+
+    vi.clearAllMocks();
+    currentRouteProjectId = '10';
+    currentProjectData = {
+      ...projectData,
+      id: 10,
+      title: 'Next Story',
+    };
+
+    rerender(<ProjectPage />);
+
+    await waitFor(() => {
+      expect(storeState.setCharacters).toHaveBeenCalledWith([]);
+    });
+    expect(storeState.setShots).toHaveBeenCalledWith([]);
+    expect(storeState.clearMessages).toHaveBeenCalled();
+    expect(storeState.resetRunState).toHaveBeenCalled();
+    expect(storeState.setProjectTitle).toHaveBeenCalledWith(null);
+    expect(storeState.setProjectStoryOutline).toHaveBeenCalledWith(null);
+    expect(storeState.setProjectVisualBible).toHaveBeenCalledWith(null);
+    expect(storeState.setBlockingClips).toHaveBeenCalledWith(null);
+
+    await waitFor(() => {
+      expect(storeState.setProjectTitle).toHaveBeenCalledWith('Next Story');
+    });
+    const clearedTitleCallIndex = storeState.setProjectTitle.mock.calls.findIndex(
+      ([title]) => title === null,
+    );
+    const nextTitleCallIndex = storeState.setProjectTitle.mock.calls.findIndex(
+      ([title]) => title === 'Next Story',
+    );
+    expect(clearedTitleCallIndex).toBeGreaterThanOrEqual(0);
+    expect(nextTitleCallIndex).toBeGreaterThan(clearedTitleCallIndex);
   });
 
   it('renders the not found page when the project query resolves empty', () => {

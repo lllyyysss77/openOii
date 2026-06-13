@@ -13,6 +13,13 @@ vi.mock("~/hooks/useDomSize", () => ({
   getShapeSize: () => undefined,
 }));
 
+const emitSpy = vi.fn();
+vi.mock("../canvasEvents", () => ({
+  canvasEvents: {
+    emit: (...args: unknown[]) => emitSpy(...args),
+  },
+}));
+
 describe("VideoSectionShape", () => {
   const shapeUtil = new VideoSectionShapeUtil({} as never);
 
@@ -44,9 +51,9 @@ describe("VideoSectionShape", () => {
       },
     }) as VideoSectionShape;
 
-  it("shows video element with title", () => {
+  it("shows video thumbnail with title", () => {
     render(shapeUtil.component(createShape()));
-    expect(screen.getByLabelText("创意项目")).toBeInTheDocument();
+    expect(screen.getByText("创意项目")).toBeInTheDocument();
   });
 
   it("shows blocking text when present", () => {
@@ -84,7 +91,7 @@ describe("VideoSectionShape", () => {
       )
     );
     expect(screen.queryByText("等待视频合成...")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("创意项目")).toBeInTheDocument();
+    expect(screen.getByText("创意项目")).toBeInTheDocument();
   });
 
   it("returns null indicator", () => {
@@ -100,10 +107,16 @@ describe("VideoSectionShape", () => {
     expect(shapeUtil.canResize()).toBe(false);
   });
 
-  it("includes video track element for captions", () => {
+  it("clicking thumbnail emits preview-video event", () => {
     render(shapeUtil.component(createShape()));
-    const track = screen.getByLabelText("创意项目").querySelector("track");
-    expect(track).toBeTruthy();
-    expect(track?.getAttribute("kind")).toBe("captions");
+    const thumbnail = screen.getByText("创意项目").closest("[class*=cursor-pointer]");
+    if (!(thumbnail instanceof HTMLElement)) {
+      throw new Error("Video thumbnail was not rendered");
+    }
+    thumbnail.click();
+    expect(emitSpy).toHaveBeenCalledWith("preview-video", {
+      src: "/static/videos/final-current.mp4",
+      title: "创意项目",
+    });
   });
 });

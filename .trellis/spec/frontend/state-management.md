@@ -22,6 +22,33 @@ Use `useState` for short-lived, single-component data. Don't reach for a store j
 
 When local state grows complex (multiple related fields, transitions), use `useReducer` before adding a new store.
 
+### Multi-step creation forms
+
+Creation forms such as `NewProjectPage` are component-local until the final
+submit. Keep the form object local, but build the API payload through a small
+helper at submit time so optional arrays can be normalized consistently.
+
+When a form can receive rapid sequential updates (button click followed by
+range/input changes, step navigation, provider selection), use functional
+updates:
+
+```ts
+setFormData((prev) => ({ ...prev, creation_mode: "quick" }));
+setFormData((prev) => ({ ...prev, target_shot_count: Number(value) }));
+```
+
+Avoid `setFormData({ ...formData, field })` in these flows. It can overwrite a
+previous update from the same event burst with a stale closure, which is easy to
+miss in manual testing.
+
+For project creation payloads:
+
+- Trim optional string arrays like `character_hints` and omit them when empty.
+- Preserve explicit bootstrap fields such as `target_shot_count` and
+  `creation_mode`; downstream generation behavior depends on them.
+- Cover new bootstrap fields with both a payload assertion test and a browser
+  flow when they affect generation behavior.
+
 ---
 
 ## Zustand (`app/stores/`)
@@ -68,6 +95,11 @@ Reading the whole state (`useSettingsStore()`) is allowed for tiny stores but ca
 ### Actions outside React
 
 `useEditorStore.getState()` is fine for reading inside non-React code (utilities, WebSocket reducer, tests). Avoid using it inside a component — the component won't re-render on changes.
+
+For one-shot mutation payloads triggered from a component, `getState()` is
+acceptable when you need the latest global value at call time and don't want a
+mutation closure to capture a stale store value. `ProjectPage` uses this for
+`runMode` when building the generation request.
 
 ### Persistence
 
@@ -151,6 +183,21 @@ The WS hook (`useProjectWebSocket`) receives events and calls store setters via 
 ### Selection state stays in editor store
 
 `selectedShotId`, `selectedCharacterId`, `highlightedMessageIndex` are in `editorStore`. New cross-component selection state should land here, not in route state or context.
+
+### Project editor bootstrapping
+
+Project metadata loaded from the API should seed `editorStore` before the canvas
+and chat panels depend on it. On project id changes, reset project-scoped
+store fields before applying the new project snapshot so stale data from the
+previous project cannot flash in the workspace.
+
+`Project.creation_mode` is persisted server data, but the active chat control is
+browser session state:
+
+- `creation_mode: "quick"` bootstraps `editorStore.runMode` to `"yolo"`.
+- Any other value bootstraps `runMode` to `"manual"`.
+- Generate requests must read the current `runMode` at mutation execution time
+  and send `auto_mode: runMode === "yolo"`.
 
 ### Modals controlled by their own store
 

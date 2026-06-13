@@ -121,3 +121,18 @@ class TestExportStatusOwnership:
             f"/api/v1/projects/{other_project.id}/export/owned123/status"
         )
         assert wrong.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_append_project_export_preserves_existing_urls(self, test_session):
+        from app.api.v1.routes.export import _append_project_export
+        from tests.factories import create_project
+
+        project = await create_project(test_session, title="Export Owner")
+        assert project.id is not None
+
+        await _append_project_export(test_session, project.id, "/static/exports/a.pdf")
+        await _append_project_export(test_session, project.id, "/static/exports/b.png")
+        await _append_project_export(test_session, project.id, "/static/exports/a.pdf")
+
+        await test_session.refresh(project)
+        assert project.exports == ["/static/exports/a.pdf", "/static/exports/b.png"]

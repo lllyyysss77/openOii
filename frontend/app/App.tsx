@@ -3,10 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
 
 import "./styles/globals.css";
-import { SettingsModal } from "./components/settings/SettingsModal";
 import { ToastContainer } from "./components/toast/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { LoadingOverlay } from "./components/ui/LoadingOverlay";
+import { useSettingsStore } from "./stores/settingsStore";
 
 // 路由懒加载
 const HomePage = lazy(() => import("./pages/HomePage").then(m => ({ default: m.HomePage })));
@@ -15,6 +15,7 @@ const NewProjectPage = lazy(() => import("./pages/NewProjectPage").then(m => ({ 
 const ProjectPage = lazy(() => import("./pages/ProjectPage").then(m => ({ default: m.ProjectPage })));
 const UniversesPage = lazy(() => import("./pages/UniversesPage").then(m => ({ default: m.UniversesPage })));
 const UniverseDetailPage = lazy(() => import("./pages/UniverseDetailPage").then(m => ({ default: m.UniverseDetailPage })));
+const SettingsModal = lazy(() => import("./components/settings/SettingsModal").then(m => ({ default: m.SettingsModal })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +29,18 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function SettingsModalHost() {
+  const isModalOpen = useSettingsStore((state) => state.isModalOpen);
+
+  if (!isModalOpen) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <SettingsModal />
+    </Suspense>
+  );
+}
 
 export function App() {
   return (
@@ -46,7 +59,7 @@ export function App() {
             </Routes>
           </Suspense>
           {/* 全局设置弹窗 - 在所有页面都可用 */}
-          <SettingsModal />
+          <SettingsModalHost />
           {/* 全局 Toast 通知 - 在所有页面都可用 */}
           <ToastContainer />
         </BrowserRouter>

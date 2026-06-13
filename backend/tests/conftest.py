@@ -30,6 +30,9 @@ def event_loop():
 def test_settings() -> Settings:
     return Settings(
         database_url="sqlite+aiosqlite:///:memory:",
+        text_provider="anthropic",
+        image_provider="openai",
+        video_provider="openai",
         anthropic_api_key="test-key",
         image_api_key="test-key",
         video_api_key="test-key",

@@ -10,6 +10,17 @@ from app import main as main_module
 from app.exceptions import AppException
 
 
+def test_local_dev_origin_regex_allows_localhost_ports():
+    pattern = main_module._local_dev_origin_regex("development")
+
+    assert pattern is not None
+    assert pattern == main_module.LOCAL_DEV_ORIGIN_REGEX
+
+
+def test_local_dev_origin_regex_disabled_in_production():
+    assert main_module._local_dev_origin_regex("prod") is None
+
+
 def test_create_app_mounts_static_and_health(monkeypatch):
     settings = SimpleNamespace(
         app_name="openOii",

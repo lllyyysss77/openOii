@@ -1,6 +1,6 @@
 import { ArrowPathIcon, StopIcon } from "@heroicons/react/24/outline";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
 	Link,
 	useNavigate,
@@ -11,9 +11,6 @@ import { ChatDrawer } from "~/components/chat/ChatDrawer";
 import { TopBar } from "~/components/layout/TopBar";
 import { StagePipeline } from "~/components/layout/StagePipeline";
 import { StageView } from "~/components/layout/StageView";
-import { AssetDrawer } from "~/components/panels/AssetDrawer";
-import { HistoryDrawer } from "~/components/panels/HistoryDrawer";
-import { VersionCompareDrawer } from "~/components/panels/VersionCompareDrawer";
 import { Button } from "~/components/ui/Button";
 import { Card } from "~/components/ui/Card";
 import { useProjectWebSocket } from "~/hooks/useWebSocket";
@@ -24,6 +21,22 @@ import type { ProjectProviderSettings, RecoveryControlRead, VersionEntityType } 
 import { ApiError } from "~/types/errors";
 import { toast } from "~/utils/toast";
 import { isWorkflowStage } from "~/utils/workflowStage";
+
+const AssetDrawer = lazy(() =>
+	import("~/components/panels/AssetDrawer").then((m) => ({
+		default: m.AssetDrawer,
+	})),
+);
+const HistoryDrawer = lazy(() =>
+	import("~/components/panels/HistoryDrawer").then((m) => ({
+		default: m.HistoryDrawer,
+	})),
+);
+const VersionCompareDrawer = lazy(() =>
+	import("~/components/panels/VersionCompareDrawer").then((m) => ({
+		default: m.VersionCompareDrawer,
+	})),
+);
 
 export function ProjectPage() {
 	const { id } = useParams<{ id: string }>();
@@ -37,7 +50,6 @@ export function ProjectPage() {
 		currentStage: storeCurrentStage,
 		awaitingConfirm: storeAwaitingConfirm,
 		recoveryControl: storeRecoveryControl,
-		runMode: storeRunMode,
 	} = useEditorStore(
 		useShallow((s) => ({
 			isGenerating: s.isGenerating,
@@ -45,7 +57,6 @@ export function ProjectPage() {
 			currentStage: s.currentStage,
 			awaitingConfirm: s.awaitingConfirm,
 			recoveryControl: s.recoveryControl,
-			runMode: s.runMode,
 		})),
 	);
 	const hasActiveRun = storeIsGenerating || Boolean(storeCurrentRunId);
@@ -60,6 +71,8 @@ export function ProjectPage() {
 	const autoStartTriggered = useRef(false);
 	const generateRequestTokenRef = useRef(0);
 	const retryCount = useRef(0);
+	const messagesLoadedRef = useRef(false);
+	const runModeInitializedRef = useRef<number | null>(null);
 
 	const { send } = useProjectWebSocket(projectId);
 
@@ -118,19 +131,19 @@ export function ProjectPage() {
 		}
 	}, [projectError, projectId, queryClient]);
 
-	const { data: characters } = useQuery({
+	const { data: characters, isLoading: charactersLoading } = useQuery({
 		queryKey: ["characters", projectId],
 		queryFn: () => projectsApi.getCharacters(projectId),
 		enabled: !!project,
 	});
 
-	const { data: shots } = useQuery({
+	const { data: shots, isLoading: shotsLoading } = useQuery({
 		queryKey: ["shots", projectId],
 		queryFn: () => projectsApi.getShots(projectId),
 		enabled: !!project,
 	});
 
-	const { data: messages } = useQuery({
+	const { data: messages, isLoading: messagesLoading } = useQuery({
 		queryKey: ["messages", projectId],
 		queryFn: () => projectsApi.getMessages(projectId),
 		enabled: !!project,
@@ -169,13 +182,21 @@ export function ProjectPage() {
 			editorStore.setProjectStoryOutline(project.story_outline ?? null);
 			editorStore.setProjectVisualBible(project.visual_bible ?? null);
 			editorStore.setProjectOutlineApproved(project.outline_approved ?? false);
+			if (runModeInitializedRef.current !== project.id) {
+				editorStore.setRunMode(
+					project.creation_mode === "quick" ? "yolo" : "manual",
+				);
+				runModeInitializedRef.current = project.id;
+			}
 		}
 	}, [project]);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (projectId <= 0) return;
 
 		generateRequestTokenRef.current += 1;
+		messagesLoadedRef.current = false;
+		runModeInitializedRef.current = null;
 		const editorStore = useEditorStore.getState();
 
 		editorStore.clearMessages();
@@ -184,10 +205,29 @@ export function ProjectPage() {
 		editorStore.setSelectedShot(null);
 		editorStore.setSelectedCharacter(null);
 		editorStore.setHighlightedMessage(null);
+		editorStore.setCharacters([]);
+		editorStore.setShots([]);
 		editorStore.setProjectVideoUrl(null);
+		editorStore.setProjectStatus(null);
+		editorStore.setProjectTitle(null);
+		editorStore.setProjectSummary(null);
+		editorStore.setProjectStory(null);
+		editorStore.setProjectStyle(null);
+		editorStore.setProjectTargetShotCount(null);
+		editorStore.setProjectCharacterHints(null);
+		editorStore.setProjectCreationMode(null);
+		editorStore.setProjectReferenceImages(null);
+		editorStore.setProjectExports(null);
+		editorStore.setProjectProviderSettings(null);
+		editorStore.setProjectUniverseId(null);
+		editorStore.setProjectChapterNumber(null);
+		editorStore.setProjectChapterTitle(null);
+		editorStore.setProjectStoryOutline(null);
+		editorStore.setProjectVisualBible(null);
+		editorStore.setProjectOutlineApproved(false);
+		editorStore.setBlockingClips(null);
 	}, [projectId]);
 
-	const messagesLoadedRef = useRef(false);
 	useEffect(() => {
 		if (messages && !messagesLoadedRef.current) {
 			messagesLoadedRef.current = true;
@@ -210,7 +250,9 @@ export function ProjectPage() {
 	const generateMutation = useMutation({
 		mutationFn: ({ requestToken }: { requestToken: number }) =>
 			projectsApi
-				.generate(projectId, { auto_mode: storeRunMode === "yolo" })
+				.generate(projectId, {
+					auto_mode: useEditorStore.getState().runMode === "yolo",
+				})
 				.then((run) => ({ run, requestToken })),
 		onSuccess: ({ run, requestToken }) => {
 			if (requestToken !== generateRequestTokenRef.current) return;
@@ -431,7 +473,11 @@ export function ProjectPage() {
 		}
 	}, [project, searchParams, setSearchParams, generateMutation]);
 
-	if (projectLoading) {
+	const workspaceLoading =
+		projectLoading ||
+		Boolean(project && (charactersLoading || shotsLoading || messagesLoading));
+
+	if (workspaceLoading) {
 		return (
 			<div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-base-100">
 				<ArrowPathIcon className="w-6 h-6 animate-pulse text-base-content/60" />
@@ -489,23 +535,35 @@ export function ProjectPage() {
 				/>
 			</div>
 
-			<AssetDrawer
-				open={assetsOpen}
-				onClose={() => setAssetsOpen(false)}
-				projectId={project.id}
-			/>
-			<HistoryDrawer
-				open={historyOpen}
-				onClose={() => setHistoryOpen(false)}
-				onNavigate={(id) => navigate(`/project/${id}`)}
-			/>
-			<VersionCompareDrawer
-				open={versionOpen}
-				projectId={project.id}
-				initialEntityType={versionTarget?.entityType}
-				initialEntityId={versionTarget?.entityId ?? null}
-				onClose={() => setVersionOpen(false)}
-			/>
+			{assetsOpen && (
+				<Suspense fallback={null}>
+					<AssetDrawer
+						open
+						onClose={() => setAssetsOpen(false)}
+						projectId={project.id}
+					/>
+				</Suspense>
+			)}
+			{historyOpen && (
+				<Suspense fallback={null}>
+					<HistoryDrawer
+						open
+						onClose={() => setHistoryOpen(false)}
+						onNavigate={(id) => navigate(`/project/${id}`)}
+					/>
+				</Suspense>
+			)}
+			{versionOpen && (
+				<Suspense fallback={null}>
+					<VersionCompareDrawer
+						open
+						projectId={project.id}
+						initialEntityType={versionTarget?.entityType}
+						initialEntityId={versionTarget?.entityId ?? null}
+						onClose={() => setVersionOpen(false)}
+					/>
+				</Suspense>
+			)}
 		</div>
 	);
 }

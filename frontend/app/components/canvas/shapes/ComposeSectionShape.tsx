@@ -9,6 +9,7 @@ import {
 import { SvgIcon } from "~/components/ui/SvgIcon";
 import { getStaticUrl } from "~/services/api";
 import { getShapeSize, useDomSize } from "~/hooks/useDomSize";
+import { canvasEvents } from "../canvasEvents";
 import {
 	getWorkspaceSectionPlaceholderText,
 	getWorkspaceSectionStatusLabel,
@@ -114,21 +115,22 @@ export class ComposeSectionShapeUtil extends ShapeUtil<ComposeSectionShape> {
 						) : null}
 						{videoUrl ? (
 							<div className="space-y-3">
-								<video
-									className="w-full rounded-xl bg-base-300"
-									src={videoUrl}
-									controls
+								<div
+									className="relative w-full aspect-video rounded-xl bg-gradient-to-br from-base-300 to-base-200 cursor-pointer group"
+									onClick={() => canvasEvents.emit("preview-video", { src: videoUrl, title: videoTitle })}
 									onPointerDown={stopCanvasDrag}
-									aria-label={videoTitle}
 								>
-									<track
-										kind="captions"
-										label="中文"
-										srcLang="zh"
-										default
-										src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n${videoTitle || "最终视频"}`)}`}
-									/>
-								</video>
+									<div className="absolute inset-0 flex items-center justify-center">
+										<div className="w-14 h-14 rounded-full bg-primary/90 flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:bg-primary transition-all">
+											<svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-primary-content ml-1">
+												<path d="M8 5.14v14l11-7-11-7Z" />
+											</svg>
+										</div>
+									</div>
+									<div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-base-content/40 to-transparent rounded-b-xl">
+										<p className="text-sm font-medium text-base-100 truncate">{videoTitle}</p>
+									</div>
+								</div>
 								<div className="flex justify-end">
 									<a
 										href={getStaticUrl(downloadUrl || videoUrl) ?? undefined}

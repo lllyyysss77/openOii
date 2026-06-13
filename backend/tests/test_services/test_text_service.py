@@ -1851,6 +1851,14 @@ def test_build_payload_temperature():
     assert payload["temperature"] == 0.5
 
 
+def test_build_payload_gpt5_uses_max_completion_tokens():
+    settings = make_settings(text_model="gpt-5-mini")
+    svc = TextService(settings)
+    payload = svc._build_payload(prompt="hi", max_tokens=10, stream=False)
+    assert payload["max_completion_tokens"] == 10
+    assert "max_tokens" not in payload
+
+
 def test_build_payload_chat_system_with_messages():
     settings = make_settings()
     svc = TextService(settings)

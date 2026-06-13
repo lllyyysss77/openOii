@@ -23,6 +23,7 @@ TEXT_PROVIDER_KEYS = ("anthropic", "openai", "fake")
 IMAGE_PROVIDER_KEYS = ("openai", "fake")
 VIDEO_PROVIDER_KEYS = ("openai", "doubao", "fake")
 TEXT_PROBE_TTL_S = 300.0
+TEXT_PROBE_GENERATE_FAILURE_TTL_S = 15.0
 TEXT_PROBE_TIMEOUT_S = 60.0
 TEXT_PROBE_MAX_RETRIES = 1
 
@@ -116,6 +117,12 @@ def _text_credentials_available(provider_key: str | None, settings: Settings) ->
     return False
 
 
+def _text_probe_cache_ttl(result: TextProviderCapability) -> float:
+    if result.status == "invalid" and result.reason_code == "provider_generate_unavailable":
+        return TEXT_PROBE_GENERATE_FAILURE_TTL_S
+    return TEXT_PROBE_TTL_S
+
+
 async def probe_text_provider(settings: Settings) -> TextProviderCapability:
     cache_key = _text_probe_cache_key(settings)
     cached = get_cached_provider_capability(cache_key)
@@ -142,10 +149,10 @@ async def probe_text_provider(settings: Settings) -> TextProviderCapability:
             reason_code="provider_unsupported",
             reason_message=f"文本 Provider '{probe_settings.text_provider}' 不受支持。",
         )
-        return set_cached_provider_capability(cache_key, result, ttl_s=TEXT_PROBE_TTL_S)
+        return set_cached_provider_capability(cache_key, result, ttl_s=_text_probe_cache_ttl(result))
 
     result = await service.probe()
-    return set_cached_provider_capability(cache_key, result, ttl_s=TEXT_PROBE_TTL_S)
+    return set_cached_provider_capability(cache_key, result, ttl_s=_text_probe_cache_ttl(result))
 
 
 def get_cached_text_provider_probe(settings: Settings) -> TextProviderCapability | None:

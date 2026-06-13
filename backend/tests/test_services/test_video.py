@@ -64,6 +64,41 @@ async def test_generate_uses_standard_payload(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_generate_uses_ltx_payload_without_model(monkeypatch):
+    svc = VideoService(
+        make_settings(
+            video_base_url="https://l0veyou.com",
+            video_endpoint="/api/generate/ltx-video",
+            video_model="ltx-video",
+        )
+    )
+
+    async def fake_post(url, payload):
+        assert url == "https://l0veyou.com/api/generate/ltx-video"
+        assert payload == {
+            "client_task_id": "ltx-video-demo",
+            "prompt": "make a video",
+            "duration": 10,
+            "aspect_ratio": "16:9",
+            "style": "cinematic",
+        }
+        assert "model" not in payload
+        return {"task_id": "ltx-video-demo", "status": "queued"}
+
+    monkeypatch.setattr(svc, "_post_json_with_retry", fake_post)
+
+    result = await svc.generate(
+        prompt="make a video",
+        duration=10,
+        client_task_id="ltx-video-demo",
+        aspect_ratio="16:9",
+        style="cinematic",
+    )
+
+    assert result == {"task_id": "ltx-video-demo", "status": "queued"}
+
+
+@pytest.mark.asyncio
 async def test_generate_uses_chat_payload(monkeypatch):
     svc = VideoService(make_settings(video_endpoint="/v1/chat/completions"))
 

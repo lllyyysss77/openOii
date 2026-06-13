@@ -8,8 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.models.agent_run import AgentMessage, AgentRun
+from app.models.artifact import Artifact
+from app.models.artifact_version import ArtifactVersion
+from app.models.consistency_report import ConsistencyReport
 from app.models.message import Message
-from app.models.project import Character, Project, Shot
+from app.models.project import Character, Project, Shot, ShotCharacterBinding
+from app.models.run import Run
+from app.models.stage import Stage
+from app.models.universe import SharedCharacter, UniverseProjectLink
 from app.services.file_cleaner import delete_file, delete_files
 
 
@@ -41,6 +47,22 @@ async def delete_project_data(session: AsyncSession, project_id: int) -> None:
     )
     await session.execute(delete(Asset).where(asset_source_project_id_col == project_id))
 
+    universe_link_project_id_col = cast(
+        InstrumentedAttribute[int], cast(object, UniverseProjectLink.project_id)
+    )
+    await session.execute(
+        delete(UniverseProjectLink).where(universe_link_project_id_col == project_id)
+    )
+
+    shared_character_project_id_col = cast(
+        InstrumentedAttribute[int | None], cast(object, SharedCharacter.source_project_id)
+    )
+    await session.execute(
+        update(SharedCharacter)
+        .where(shared_character_project_id_col == project_id)
+        .values(source_project_id=None)
+    )
+
     message_project_id_col = cast(InstrumentedAttribute[int], cast(object, Message.project_id))
     await session.execute(delete(Message).where(message_project_id_col == project_id))
 
@@ -51,13 +73,53 @@ async def delete_project_data(session: AsyncSession, project_id: int) -> None:
     )
     run_ids_subq = select(agent_run_id_col).where(agent_run_project_id_col == project_id)
     await session.execute(delete(AgentMessage).where(agent_message_run_id_col.in_(run_ids_subq)))
+
+    artifact_version_project_id_col = cast(
+        InstrumentedAttribute[int], cast(object, ArtifactVersion.project_id)
+    )
+    await session.execute(
+        delete(ArtifactVersion).where(artifact_version_project_id_col == project_id)
+    )
+
+    consistency_report_project_id_col = cast(
+        InstrumentedAttribute[int], cast(object, ConsistencyReport.project_id)
+    )
+    await session.execute(
+        delete(ConsistencyReport).where(consistency_report_project_id_col == project_id)
+    )
+
     await session.execute(delete(AgentRun).where(agent_run_project_id_col == project_id))
 
     shot_project_id_col = cast(InstrumentedAttribute[int], cast(object, Shot.project_id))
-    await session.execute(delete(Shot).where(shot_project_id_col == project_id))
+    shot_id_col = cast(InstrumentedAttribute[int | None], cast(object, Shot.id))
+    shot_ids_subq = select(shot_id_col).where(shot_project_id_col == project_id)
 
     character_project_id_col = cast(InstrumentedAttribute[int], cast(object, Character.project_id))
+    character_id_col = cast(InstrumentedAttribute[int | None], cast(object, Character.id))
+    character_ids_subq = select(character_id_col).where(character_project_id_col == project_id)
+
+    binding_shot_id_col = cast(InstrumentedAttribute[int], cast(object, ShotCharacterBinding.shot_id))
+    binding_character_id_col = cast(
+        InstrumentedAttribute[int], cast(object, ShotCharacterBinding.character_id)
+    )
+    await session.execute(
+        delete(ShotCharacterBinding).where(
+            binding_shot_id_col.in_(shot_ids_subq)
+            | binding_character_id_col.in_(character_ids_subq)
+        )
+    )
+
+    await session.execute(delete(Shot).where(shot_project_id_col == project_id))
     await session.execute(delete(Character).where(character_project_id_col == project_id))
+
+    artifact_project_id_col = cast(InstrumentedAttribute[int], cast(object, Artifact.project_id))
+    await session.execute(delete(Artifact).where(artifact_project_id_col == project_id))
+
+    stage_project_id_col = cast(InstrumentedAttribute[int], cast(object, Stage.project_id))
+    await session.execute(delete(Stage).where(stage_project_id_col == project_id))
+
+    run_project_id_col = cast(InstrumentedAttribute[int], cast(object, Run.project_id))
+    await session.execute(delete(Run).where(run_project_id_col == project_id))
 
 
 async def delete_project_by_id(session: AsyncSession, project_id: int) -> None:

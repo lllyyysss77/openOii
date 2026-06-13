@@ -109,6 +109,22 @@ describe("useCanvasLayout", () => {
 		expect(result.current.shapes).toHaveLength(0);
 	});
 
+	it("returns no cards for a project that only has the original story prompt", () => {
+		const { result } = renderHook(() =>
+			useCanvasLayout({
+				...defaultProps,
+				story: "用户刚输入的故事想法",
+				summary: null,
+				characters: [],
+				shots: [],
+				videoUrl: null,
+				visibleSections: ["plan"] as SectionKey[],
+			}),
+		);
+
+		expect(result.current.shapes).toHaveLength(0);
+	});
+
 	it("passes characters through the character section props", () => {
 		const characters = [makeCharacter(1, "Alice"), makeCharacter(2, "Bob")];
 		const { result } = renderHook(() =>
@@ -202,7 +218,7 @@ describe("useCanvasLayout", () => {
 		expect(result2.current.shapes.map((shape) => shape.id)).toEqual(ids);
 	});
 
-	it("marks plan card state as generating when generating", () => {
+	it("keeps the canvas empty while generation has not produced plan content", () => {
 		const { result } = renderHook(() =>
 			useCanvasLayout({
 				...defaultProps,
@@ -213,7 +229,7 @@ describe("useCanvasLayout", () => {
 			}),
 		);
 
-		expect(shapeProps(result, "plan-section")?.sectionState).toBe("generating");
+		expect(result.current.shapes).toHaveLength(0);
 	});
 
 	it("marks plan card state as complete when story exists", () => {

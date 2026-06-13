@@ -89,6 +89,19 @@ Top-level service functions get a one-liner docstring. Routes and trivial helper
 
 Use `SettingsDep` (from `app.api.deps`) inside routes. Inside `get_settings()`-aware code paths (workers, services), call `get_settings()` directly. **Do not** instantiate `Settings()` at module import time outside of tests.
 
+### Development CORS
+
+Local development uses multiple frontend ports (`pnpm dev`, Vite preview,
+browser automation servers). Do not keep adding one-off localhost ports to
+`.env` as the primary fix. `create_app()` allows `localhost` and `127.0.0.1`
+with any port via `allow_origin_regex` only for development-like environments
+(`dev`, `development`, `local`, `test`).
+
+Production/staging environments must continue to rely on explicit
+`CORS_ORIGINS`; do not enable wildcard local-origin regex outside development.
+When changing this boundary, add tests for both the dev-enabled and
+production-disabled cases.
+
 ---
 
 ## Forbidden Patterns

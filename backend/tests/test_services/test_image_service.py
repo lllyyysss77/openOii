@@ -34,6 +34,10 @@ def test_extract_url_from_text_handles_data_and_wrapped_urls():
 
     assert service._extract_url_from_text("data:image/png;base64,abc") == "data:image/png;base64,abc"
     assert service._extract_url_from_text("see https://cdn.example.com/a.png).") == "https://cdn.example.com/a.png"
+    assert (
+        service._extract_url_from_text("![image_1](data:image/png;base64,aGVsbG8=)")
+        == "data:image/png;base64,aGVsbG8="
+    )
     assert service._extract_url_from_text("no url here") is None
 
 
@@ -100,6 +104,19 @@ async def test_cache_external_image_returns_original_on_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_cache_external_image_saves_data_url(monkeypatch, tmp_path):
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    service = ImageService(settings)
+    monkeypatch.setattr("app.services.image.STATIC_DIR", tmp_path)
+
+    result = await service.cache_external_image("data:image/png;base64,aGVsbG8=")
+
+    assert result.startswith("/static/images/")
+    saved = tmp_path / result.removeprefix("/static/")
+    assert saved.read_bytes() == b"hello"
+
+
+@pytest.mark.asyncio
 async def test_generate_url_dalle(monkeypatch):
     settings = Settings(
         database_url="sqlite+aiosqlite:///:memory:",
@@ -135,6 +152,44 @@ async def test_generate_url_chat_completions(monkeypatch):
 
     url = await service.generate_url(prompt="cat")
     assert url == "https://cdn.example.com/stream.png"
+
+
+@pytest.mark.asyncio
+async def test_generate_url_chat_completions_extracts_markdown_data_url(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        image_base_url="https://img.example.com",
+        image_endpoint="/chat/completions",
+        image_api_key="test",
+    )
+    service = ImageService(settings)
+
+    async def fake_stream(url, payload):
+        return "![image_1](data:image/png;base64,aGVsbG8=)"
+
+    monkeypatch.setattr(service, "_post_stream_with_retry", fake_stream)
+
+    url = await service.generate_url(prompt="cat")
+    assert url == "data:image/png;base64,aGVsbG8="
+
+
+@pytest.mark.asyncio
+async def test_generate_url_dalle_accepts_b64_json(monkeypatch):
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        image_base_url="https://img.example.com",
+        image_endpoint="/images/generations",
+        image_api_key="test",
+    )
+    service = ImageService(settings)
+
+    async def fake_post(url, payload):
+        return {"data": [{"b64_json": "aGVsbG8="}]}
+
+    monkeypatch.setattr(service, "_post_json_with_retry", fake_post)
+
+    url = await service.generate_url(prompt="cat")
+    assert url == "data:image/png;base64,aGVsbG8="
 
 
 @pytest.mark.asyncio
@@ -682,6 +737,49 @@ async def test_post_stream_with_retry_returns_text(monkeypatch):
     monkeypatch.setattr("app.services.image.httpx.AsyncClient", lambda *args, **kwargs: FakeClient())
 
     assert await service._post_stream_with_retry("https://img.example.com/chat/completions", {"stream": True}) == "https://cdn.example.com/image.png"
+
+
+@pytest.mark.asyncio
+async def test_post_stream_with_retry_collects_direct_payload_url(monkeypatch):
+    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    service = ImageService(settings)
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        async def aiter_lines(self):
+            yield 'data: {"data": [{"url": "https://cdn.example.com/image.png"}]}'
+            yield "data: [DONE]"
+
+    class FakeStream:
+        async def __aenter__(self):
+            return FakeResponse()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def stream(self, *args, **kwargs):
+            return FakeStream()
+
+    monkeypatch.setattr("app.services.image.httpx.AsyncClient", lambda *args, **kwargs: FakeClient())
+
+    assert (
+        await service._post_stream_with_retry(
+            "https://img.example.com/chat/completions",
+            {"stream": True},
+        )
+        == "https://cdn.example.com/image.png"
+    )
 
 
 # --- download_and_save ---

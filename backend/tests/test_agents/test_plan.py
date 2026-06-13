@@ -165,6 +165,38 @@ async def test_plan_agent_full_mode_creates_characters_and_shots(test_session, t
 
 
 @pytest.mark.asyncio
+async def test_plan_agent_shot_decision_counts_existing_characters(test_session, test_settings):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id)
+    await create_character(test_session, project_id=project.id, name="Hero")
+    await create_character(test_session, project_id=project.id, name="Guide")
+
+    llm_output = json.dumps({
+        "agent": "plan",
+        "visual_bible": "test",
+        "shots": [{"order": 1, "description": "Hero follows the guide"}],
+    }, ensure_ascii=False)
+
+    llm = FakeLLM(llm_output)
+    ctx = await make_context(test_session, test_settings, project=project, run=run, llm=llm)
+
+    await PlanAgent().run_shots(ctx)
+
+    thinking_events = [
+        event
+        for _, event in ctx.ws.events
+        if event["type"] == "agent_thinking"
+    ]
+    assert any(
+        event["data"]["content"] == "已生成 1 个分镜和 2 个角色"
+        for event in thinking_events
+    )
+
+    await test_session.refresh(project)
+    assert project.summary == "2个角色，1个分镜"
+
+
+@pytest.mark.asyncio
 async def test_plan_agent_composes_image_prompt_when_missing(test_session, test_settings):
     project = await create_project(test_session)
     run = await create_run(test_session, project_id=project.id)

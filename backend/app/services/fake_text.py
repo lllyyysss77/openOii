@@ -196,7 +196,7 @@ class FakeTextService:
             shot_count = int(target) if target is not None else 6
         except (TypeError, ValueError):
             shot_count = 6
-        shot_count = max(4, min(shot_count, 8))
+        shot_count = max(1, min(shot_count, 8))
         shot_templates = [
             ("创作工作室", "小欧按下开始生成按钮，屏幕上亮起 Fake 三个字", "期待而专注", "中景缓慢推近", "柔和蓝色屏幕光", "开始本地测试。", "键盘轻响"),
             ("分镜白板前", "调试精灵用发光光标圈出文本、图片、视频三个开关", "认真提醒", "近景横移", "明亮顶光", "Fake 模式已开启。", "提示音"),

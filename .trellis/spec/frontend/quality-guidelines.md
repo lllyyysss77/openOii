@@ -116,6 +116,14 @@ These apply on top of the global agent defaults.
 - E2E tests live in `frontend/tests/e2e/`.
 - Use **MSW** for HTTP mocking when component tests need it. Don't mock `axios` ad-hoc with `vi.mock("axios")`.
 - Don't write tests that rely on real timers or real network. Use `vi.useFakeTimers()` and MSW.
+- When changing project bootstrap fields (`creation_mode`, `target_shot_count`,
+  `character_hints`, provider overrides, reference images), add a payload
+  assertion test for the creation form and manually verify the browser request
+  if the field changes generation behavior.
+- For changes that affect first-load performance or lazy-loaded surfaces,
+  verify in a production preview with browser resource timing. Home must not
+  load project-only chunks such as `tldraw-vendor`, `InfiniteCanvas`, or drawer
+  modules before those surfaces are opened.
 
 ---
 
@@ -157,6 +165,10 @@ These apply on top of the global agent defaults.
 3. **Adding a feature without checking for an existing utility** — `app/utils/runtimeBase.ts`, `app/utils/clearLoadingStates.ts`, `app/utils/workflowStage.ts` already cover several common cases.
 4. **Mocking too deep.** Mock at module boundaries (`services/api.ts`), not at `axios` call level.
 5. **Letting `editorStore` accumulate everything.** Split when a domain emerges (e.g., recovery state could be its own store).
+6. **Testing multi-step forms only with slow user clicks.** Rapid sequential
+   updates can expose stale React closure bugs; include at least one test or
+   browser pass that changes mode, range/input values, and step navigation in
+   the same flow.
 
 ---
 

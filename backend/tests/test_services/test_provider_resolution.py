@@ -5,7 +5,9 @@ from types import SimpleNamespace
 import pytest
 
 from app.config import Settings
+from app.services import provider_resolution as provider_resolution_module
 from app.services.provider_resolution import (
+    TEXT_PROBE_GENERATE_FAILURE_TTL_S,
     TEXT_PROBE_MAX_RETRIES,
     _missing_credentials_message,
     _normalize_provider_key,
@@ -275,3 +277,49 @@ async def test_probe_text_provider_allows_slow_proxy_probe(monkeypatch) -> None:
 
     assert captured["request_timeout_s"] == 60.0
     assert result.status == "valid"
+
+
+@pytest.mark.asyncio
+async def test_probe_text_provider_caches_generate_failures_briefly(monkeypatch) -> None:
+    settings = Settings(
+        text_provider="openai",
+        text_api_key="text-key",
+        text_base_url="https://flaky-proxy.example.com",
+        text_model="gpt-flaky-test",
+        text_endpoint="/chat/completions",
+    )
+    captured: dict[str, float] = {}
+
+    class DummyTextService:
+        def __init__(self, probe_settings: Settings, *, max_retries: int = 0):
+            pass
+
+        async def probe(self) -> TextProviderCapability:
+            return TextProviderCapability(
+                status="invalid",
+                generate=False,
+                stream=False,
+                reason_code="provider_generate_unavailable",
+                reason_message="文本 Provider 连通性预检失败：Server error (HTTP 502)",
+            )
+
+    def fake_set_cached_provider_capability(
+        cache_key: str,
+        result: TextProviderCapability,
+        *,
+        ttl_s: float,
+    ) -> TextProviderCapability:
+        captured["ttl_s"] = ttl_s
+        return result
+
+    monkeypatch.setattr("app.services.provider_resolution.TextService", DummyTextService)
+    monkeypatch.setattr(
+        provider_resolution_module,
+        "set_cached_provider_capability",
+        fake_set_cached_provider_capability,
+    )
+
+    result = await probe_text_provider(settings)
+
+    assert result.status == "invalid"
+    assert captured["ttl_s"] == TEXT_PROBE_GENERATE_FAILURE_TTL_S

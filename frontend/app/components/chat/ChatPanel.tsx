@@ -105,6 +105,14 @@ export function ChatPanel({
   const showManualConfirm = awaitingConfirm && !isYolo;
   const showOutlinePreview =
     showManualConfirm && awaitingAgent === "outline" && recoveryGate?.story_outline;
+  const handleRunModeToggle = () => {
+    const nextMode = isYolo ? "manual" : "yolo";
+    setRunMode(nextMode);
+    if (nextMode === "yolo" && awaitingConfirm) {
+      onConfirm(undefined);
+      setInput("");
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-base-100">
@@ -116,20 +124,20 @@ export function ChatPanel({
 
         <button
           type="button"
-          onClick={() => setRunMode(isYolo ? "manual" : "yolo")}
+          onClick={handleRunModeToggle}
           className={`btn btn-xs gap-0.5 ${isYolo ? "btn-primary btn-sm border-2" : "btn-ghost"} !min-h-0 !h-6 text-xs font-comic`}
-          aria-label={isYolo ? "切换手动模式" : "切换YOLO模式"}
-          title={isYolo ? "YOLO：自动确认" : "手动：逐阶段确认"}
+          aria-label={isYolo ? "切换精细审阅模式" : "切换快速生成模式"}
+          title={isYolo ? "快速生成：自动确认" : "精细审阅：逐阶段确认"}
         >
           {isYolo ? (
             <>
               <BoltIcon className="w-2.5 h-2.5" />
-              YOLO
+              快速
             </>
           ) : (
             <>
               <AdjustmentsHorizontalIcon className="w-2.5 h-2.5" />
-              手动
+              审阅
             </>
           )}
         </button>
@@ -142,7 +150,7 @@ export function ChatPanel({
             {agentNameMap[currentAgent || ""] || currentAgent || "处理中"}...
             {isYolo && (
               <span className="badge badge-primary badge-outline badge-xs gap-0.5 border-2">
-                <BoltIcon className="w-2 h-2" /> AUTO
+                <BoltIcon className="w-2 h-2" /> 快速
               </span>
             )}
           </div>
@@ -167,7 +175,7 @@ export function ChatPanel({
               </div>
               <p className="text-xs text-base-content/50 mb-3 max-w-xs">
                 {isYolo
-                  ? "点击开始，AI 全自动生成"
+                  ? "点击开始，AI 自动推进生成"
                   : "点击开始，AI 根据你的故事生成漫剧"}
               </p>
               <Button
@@ -237,7 +245,7 @@ export function ChatPanel({
       {awaitingConfirm && isYolo && isPaused && onPause && (
         <div className="px-2.5 py-1 border-t border-base-content/10 bg-primary/5 flex items-center gap-1.5 text-xs text-base-content/50">
           <BoltIcon className="w-2.5 h-2.5" />
-          YOLO 已暂停
+          快速生成已暂停
           <Button size="sm" variant="ghost" onClick={onPause} className="ml-auto !px-1.5 !py-0 !min-h-0 !h-auto text-xs">
             继续
           </Button>

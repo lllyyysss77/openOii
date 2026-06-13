@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any
 from urllib.parse import quote
+from uuid import uuid4
 
 import logging
 
@@ -297,7 +298,18 @@ class VideoService:
         else:
             # 根据模型类型使用不同参数格式
             model_lower = self.settings.video_model.lower()
-            if "grok" in model_lower:
+            endpoint_lower = self.settings.video_endpoint.lower()
+            if "ltx" in model_lower or endpoint_lower.endswith("/ltx-video"):
+                payload = {
+                    "client_task_id": kwargs.pop(
+                        "client_task_id", f"ltx-video-{uuid4().hex}"
+                    ),
+                    "prompt": prompt,
+                    "duration": int(duration),
+                    "aspect_ratio": kwargs.pop("aspect_ratio", "16:9"),
+                    **kwargs,
+                }
+            elif "grok" in model_lower:
                 # grok-videos 使用 seconds 和 size 参数
                 payload: dict[str, Any] = {
                     "model": self.settings.video_model,

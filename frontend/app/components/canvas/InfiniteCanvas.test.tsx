@@ -103,6 +103,8 @@ const useCanvasLayoutMock = vi.hoisted(() =>
 	})),
 );
 
+const tldrawPersistenceKeys = vi.hoisted(() => [] as string[]);
+
 const mockEditor = vi.hoisted(() => {
 	let shapes: MockShape[] = [];
 
@@ -184,13 +186,16 @@ vi.mock("tldraw", async (importOriginal) => {
 		Tldraw: ({
 			children,
 			onMount,
+			persistenceKey,
 		}: {
 			children: ReactNode;
 			onMount: (editor: unknown) => void;
+			persistenceKey?: string;
 		}) => {
 			useEffect(() => {
+				if (persistenceKey) tldrawPersistenceKeys.push(persistenceKey);
 				onMount(mockEditor);
-			}, [onMount]);
+			}, [onMount, persistenceKey]);
 
 			return <div>{children}</div>;
 		},
@@ -224,6 +229,7 @@ vi.mock("~/hooks/useCanvasLayout", async (importOriginal) => {
 
 beforeEach(() => {
 	mockEditor.reset();
+	tldrawPersistenceKeys.length = 0;
 	mockStoreState.projectVideoUrl = null;
 	mockStoreState.blockingClips = null;
 	vi.clearAllMocks();
@@ -427,5 +433,46 @@ describe("InfiniteCanvas", () => {
 		expect(mockEditor.createShapes).not.toHaveBeenCalled();
 		expect(mockEditor.updateShapes).not.toHaveBeenCalled();
 		expect(mockEditor.deleteShapes).not.toHaveBeenCalled();
+	});
+
+	it("uses a project-scoped tldraw persistence key", async () => {
+		render(<InfiniteCanvas projectId={42} />);
+
+		await waitFor(() => {
+			expect(tldrawPersistenceKeys).toContain(
+				"openoii-canvas-v12-project-42",
+			);
+		});
+	});
+
+	it("clears projected cards when the current project has no generated canvas content", async () => {
+		const defaultLayoutImplementation = useCanvasLayoutMock.getMockImplementation();
+		useCanvasLayoutMock.mockImplementation(() => ({ shapes: [] }));
+		mockEditor.createShapes([
+			{ id: "shape:plan-section", type: "plan-section" },
+			{ id: "shape:storyboard-section", type: "storyboard-section" },
+			{
+				id: "shape:workflow-plan-to-render",
+				type: "arrow",
+				meta: { "openoii-workflow-arrow": true },
+			},
+		]);
+		mockEditor.createShapes.mockClear();
+
+		render(<InfiniteCanvas projectId={1} />);
+
+		await waitFor(() => {
+			expect(mockEditor.deleteShapes).toHaveBeenCalledWith(
+				expect.arrayContaining([
+					"shape:plan-section",
+					"shape:storyboard-section",
+					"shape:workflow-plan-to-render",
+				]),
+			);
+		});
+		expect(mockEditor.createShapes).not.toHaveBeenCalled();
+		if (defaultLayoutImplementation) {
+			useCanvasLayoutMock.mockImplementation(defaultLayoutImplementation);
+		}
 	});
 });

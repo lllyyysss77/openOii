@@ -147,6 +147,22 @@ export interface CanvasLayoutResult {
 	shapes: TLShapePartial[];
 }
 
+function hasGeneratedCanvasContent(data: {
+	summary: string | null;
+	characters: Character[];
+	shots: Shot[];
+	videoUrl: string | null;
+	blockingClips?: BlockingClip[] | null;
+}): boolean {
+	return (
+		Boolean(data.summary) ||
+		data.characters.length > 0 ||
+		data.shots.length > 0 ||
+		Boolean(data.videoUrl) ||
+		Boolean(data.blockingClips?.length)
+	);
+}
+
 export function useCanvasLayout({
 	projectId,
 	story,
@@ -193,6 +209,10 @@ export function useCanvasLayout({
 	);
 
 	return useMemo(() => {
+		if (!hasGeneratedCanvasContent(sectionData)) {
+			return { shapes: [] };
+		}
+
 		const visibleSet = new Set(visibleSections);
 		const sectionStates: Partial<Record<SectionKey, SectionState>> = {};
 		const placeholders: Partial<Record<SectionKey, boolean>> = {};

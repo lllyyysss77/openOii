@@ -94,6 +94,9 @@ class TextService:
     def _is_chat_endpoint(self) -> bool:
         return "/chat/completions" in self.settings.text_endpoint
 
+    def _uses_max_completion_tokens(self) -> bool:
+        return self._is_chat_endpoint() and self.settings.text_model.lower().startswith("gpt-5")
+
     async def _post_json_with_retry(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         last_exc: Exception | None = None
         last_status: int | None = None
@@ -265,11 +268,12 @@ class TextService:
         stream: bool,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "model": self.settings.text_model,
-            "max_tokens": max_tokens,
-            **kwargs,
-        }
+        payload: dict[str, Any] = {"model": self.settings.text_model, **kwargs}
+        if self._uses_max_completion_tokens():
+            payload.pop("max_tokens", None)
+            payload.setdefault("max_completion_tokens", max_tokens)
+        else:
+            payload.setdefault("max_tokens", max_tokens)
         if self.settings.text_enable_thinking is not None:
             payload["enable_thinking"] = self.settings.text_enable_thinking
         if temperature is not None:

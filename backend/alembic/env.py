@@ -6,7 +6,7 @@ from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, inspect, pool, text
 from sqlalchemy.engine import make_url
 from sqlmodel import SQLModel
 
@@ -78,6 +78,32 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Ensure alembic_version.version_num column is wide enough for long revision IDs.
+        # Alembic creates this table with VARCHAR(32) by default, but our revision
+        # IDs (e.g. "0003_phase7_project_provider_contracts") exceed 32 chars.
+        # We either alter the existing PostgreSQL column, or pre-create the
+        # table with a wider column. Tests run migrations against SQLite, so
+        # table existence must use SQLAlchemy inspection instead of
+        # PostgreSQL-only information_schema.
+        if inspect(connection).has_table("alembic_version"):
+            if connection.dialect.name == "postgresql":
+                connection.execute(
+                    text(
+                        "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)"
+                    )
+                )
+                connection.commit()
+        else:
+            # Pre-create alembic_version with a wider version_num column before
+            # Alembic auto-creates it with VARCHAR(32).
+            connection.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS alembic_version "
+                    "(version_num VARCHAR(128) NOT NULL)"
+                )
+            )
+            connection.commit()
+
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

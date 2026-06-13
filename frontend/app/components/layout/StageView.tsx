@@ -19,7 +19,7 @@ export function StageView({ projectId }: StageViewProps) {
         </div>
       }
     >
-      <InfiniteCanvas projectId={projectId} />
+      <InfiniteCanvas key={projectId} projectId={projectId} />
     </Suspense>
   );
 }

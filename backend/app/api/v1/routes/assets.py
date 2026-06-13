@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from uuid import uuid4
+
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,8 +17,34 @@ from app.schemas.project import (
     ShotRead,
     UseAssetInProjectRequest,
 )
+from app.services.file_cleaner import STATIC_DIR
 
 router = APIRouter()
+
+
+@router.post("/upload-image", response_model=dict)
+async def upload_asset_image(file: UploadFile = File(...)):
+    """上传资产图片到 /static/assets/ 目录，返回 URL 路径"""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are accepted")
+
+    assets_dir = STATIC_DIR / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = file.content_type.split("/")[-1]
+    if ext == "jpeg":
+        ext = "jpg"
+    filename = f"{uuid4().hex[:12]}.{ext}"
+    dest = assets_dir / filename
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image must be under 10MB")
+
+    dest.write_bytes(content)
+
+    url_path = f"/static/assets/{filename}"
+    return {"url": url_path}
 
 
 @router.get("", response_model=AssetListRead)

@@ -74,6 +74,14 @@ const WORKFLOW_ARROW_META = "openoii-workflow-arrow";
 const MANUAL_POSITION_META = "manualPosition";
 const CARD_PADDING = 32;
 
+function isProjectedCanvasShape(shape: TLShape): boolean {
+	return (
+		PROJECTED_SHAPE_TYPES.has(shape.type) ||
+		STALE_SHAPE_TYPES.has(shape.type) ||
+		(shape.type === "arrow" && shape.meta?.[WORKFLOW_ARROW_META] === true)
+	);
+}
+
 interface ShapeBounds {
 	x: number;
 	y: number;
@@ -494,6 +502,20 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
 		const currentShapes = shapesRef.current;
 		const currentSignature = shapesSignatureRef.current;
+		if (currentShapes.length === 0) {
+			const projectedShapeIds = editor
+				.getCurrentPageShapes()
+				.filter(isProjectedCanvasShape)
+				.map((shape) => shape.id);
+			if (projectedShapeIds.length > 0) {
+				editor.deleteShapes(projectedShapeIds);
+			}
+			projectedPositionRef.current = new Map();
+			lastAppliedShapesSignatureRef.current = currentSignature;
+			setIsInitialized(true);
+			return;
+		}
+
 		const resolvedShapes = resolveShapeLayout(
 			currentShapes,
 			editor.getCurrentPageShapes(),
@@ -529,9 +551,19 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 		if (lastAppliedShapesSignatureRef.current === shapesSignature) return;
 
 		const desiredShapes = layout.shapes;
-		if (desiredShapes.length === 0) return;
-
 		const existingShapes = editor.getCurrentPageShapes();
+		if (desiredShapes.length === 0) {
+			const toDelete = existingShapes
+				.filter(isProjectedCanvasShape)
+				.map((shape) => shape.id);
+			if (toDelete.length > 0) {
+				editor.deleteShapes(toDelete);
+			}
+			projectedPositionRef.current = new Map();
+			lastAppliedShapesSignatureRef.current = shapesSignature;
+			return;
+		}
+
 		const desiredIds = new Set(desiredShapes.map((s) => s.id));
 		const resolvedShapes = resolveShapeLayout(
 			desiredShapes,
@@ -591,7 +623,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 					shapeUtils={customShapeUtils}
 					components={components}
 					onMount={handleMount}
-					persistenceKey="openoii-canvas-v12"
+					persistenceKey={`openoii-canvas-v12-project-${projectId}`}
 				>
 					<CanvasToolbar projectId={projectId} />
 					<ShapeContextMenu />

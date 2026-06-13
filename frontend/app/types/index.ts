@@ -30,10 +30,12 @@ export interface CreateProjectPayload extends ProjectProviderOverridesPayload {
 	title: string;
 	story?: string;
 	style?: string;
+	status?: string | null;
 	target_shot_count?: number;
 	character_hints?: string[];
 	creation_mode?: string;
 	reference_images?: string[];
+	exports?: string[] | null;
 	universe_id?: number | null;
 	chapter_number?: number | null;
 	chapter_title?: string | null;

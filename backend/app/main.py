@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 
 # 静态文件目录
 STATIC_DIR = Path(__file__).parent / "static"
+LOCAL_DEV_ORIGIN_REGEX = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
+
+
+def _local_dev_origin_regex(environment: str | None) -> str | None:
+    if (environment or "").lower() in {"dev", "development", "local", "test"}:
+        return LOCAL_DEV_ORIGIN_REGEX
+    return None
 
 
 @asynccontextmanager
@@ -45,6 +52,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        allow_origin_regex=_local_dev_origin_regex(settings.environment),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

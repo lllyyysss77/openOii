@@ -23,13 +23,39 @@ export default defineConfig({
     // 代码分割优化
     rollupOptions: {
       output: {
-        manualChunks: {
-          // 将 React 相关库打包到单独的 chunk
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          // 将状态管理库打包到单独的 chunk
-          'state-vendor': ['zustand', '@tanstack/react-query'],
-          // 将 tldraw 打包到单独的 chunk（较大的库）
-          'tldraw-vendor': ['tldraw'],
+        manualChunks(id) {
+          const normalizedId = id.replace(/\\/g, "/");
+          if (!normalizedId.includes("/node_modules/")) return;
+
+          const packageName = normalizedId.match(
+            /\/node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?((?:@[^/]+\/)?[^/]+)/,
+          )?.[1];
+
+          if (!packageName) return;
+
+          // Keep ReactDOM client in the React chunk. With object-form chunks,
+          // Rollup can place this module behind tldraw and force the home page
+          // to preload the full canvas runtime just to call createRoot().
+          if (
+            [
+              "react",
+              "react-dom",
+              "scheduler",
+              "react-router",
+              "react-router-dom",
+              "@remix-run/router",
+              "@tanstack/query-core",
+              "@tanstack/react-query",
+              "zustand",
+              "use-sync-external-store",
+            ].includes(packageName)
+          ) {
+            return "react-vendor";
+          }
+
+          if (packageName === "tldraw" || packageName.startsWith("@tldraw/")) {
+            return "tldraw-vendor";
+          }
         },
       },
     },

@@ -151,7 +151,7 @@ describe('ChatPanel', () => {
     expect(onConfirm).toHaveBeenLastCalledWith('修改剧情节奏');
   });
 
-  it('toggles between manual and YOLO mode', async () => {
+  it('toggles between review and quick mode', async () => {
     const user = userEvent.setup();
     storeState.runMode = 'manual';
 
@@ -165,9 +165,39 @@ describe('ChatPanel', () => {
       />
     );
 
-    const toggleButton = screen.getByRole('button', { name: '切换YOLO模式' });
+    const toggleButton = screen.getByRole('button', { name: '切换快速生成模式' });
     await user.click(toggleButton);
     expect(setRunMode).toHaveBeenCalledWith('yolo');
+  });
+
+  it('confirms the current gate when switching to quick mode while awaiting confirmation', async () => {
+    const user = userEvent.setup();
+    storeState.awaitingConfirm = true;
+    storeState.awaitingAgent = 'plan';
+    storeState.runMode = 'manual';
+    storeState.messages = [
+      {
+        id: '1',
+        agent: 'plan',
+        role: 'assistant',
+        content: '规划完成',
+      },
+    ] as never[];
+
+    render(
+      <ChatPanel
+        onSendFeedback={onSendFeedback}
+        onConfirm={onConfirm}
+        onGenerate={onGenerate}
+        onCancel={onCancel}
+        isGenerating
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: '切换快速生成模式' }));
+
+    expect(setRunMode).toHaveBeenCalledWith('yolo');
+    expect(onConfirm).toHaveBeenLastCalledWith(undefined);
   });
 
   it('hides manual confirm bar in YOLO mode', () => {

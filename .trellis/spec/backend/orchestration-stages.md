@@ -262,6 +262,25 @@ async def _manual_approval_node(runtime, *, approval_stage, history_key, gate, m
 ctx.plan_data: dict | None = None  # Set by run_characters(), read by run_shots()
 ```
 
+### Plan sub-step source of truth
+
+`PlanAgent.run_characters()` and `PlanAgent.run_shots()` are split stages, so
+their response payloads have different meanings:
+
+- Character planning counts and persists characters from the LLM
+  `characters` field.
+- Shot planning must treat the already-persisted `Character` rows for the
+  project as the source of truth for character count, shot bindings, summaries,
+  and progress/thinking messages.
+- Do not count `data["characters"]` inside `run_shots()`. In the common
+  split-stage path, the shot response only contains `shots`, so counting
+  `data["characters"]` reports `0` even when the project has approved
+  characters.
+
+Add a regression test whenever a plan-stage summary or progress message changes:
+seed persisted characters, run `run_shots()` with a shots-only response, and
+assert the emitted message still reports the persisted character count.
+
 ### Thinking Chain
 
 All agents emit `agent_thinking` WS events during execution via `send_thinking()` on `BaseAgent`:
