@@ -1,16 +1,37 @@
 from __future__ import annotations
 
-from typing import Protocol
+from collections.abc import AsyncIterator
+from typing import Any, Protocol
 
 from app.config import Settings
-from app.services.llm import LLMService
+from app.services.llm import LLMResponse, LLMService
 from app.services.text import TextService
 
 
 class TextServiceProtocol(Protocol):
     """文本生成服务协议（LLM 或 OpenAI 兼容）"""
 
-    async def generate(self, *, prompt: str, max_tokens: int = 1024, **kwargs) -> str:
+    async def generate(
+        self,
+        *,
+        messages: list[dict[str, Any]] | None = None,
+        prompt: str | None = None,
+        system: str | None = None,
+        max_tokens: int = 1024,
+        temperature: float | None = None,
+        **kwargs: Any,
+    ) -> LLMResponse:
+        ...
+
+    def stream(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> AsyncIterator[dict[str, Any]]:
         ...
 
 

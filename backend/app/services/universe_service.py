@@ -41,6 +41,33 @@ class UniverseService:
         await self.session.refresh(universe)
         return universe
 
+    async def delete_universe(self, universe: Universe) -> bool:
+        """删除宇宙（级联删除关联的角色和项目链接，清除项目的外键引用）"""
+        from app.models.project import Project
+        # 清除关联 project 的 universe_id
+        result = await self.session.execute(
+            select(Project).where(Project.universe_id == universe.id)
+        )
+        for project in result.scalars().all():
+            project.universe_id = None
+            project.chapter_number = None
+            project.chapter_title = None
+            self.session.add(project)
+
+        # 软删除共享角色
+        result2 = await self.session.execute(
+            select(SharedCharacter).where(SharedCharacter.universe_id == universe.id)
+        )
+        for sc in result2.scalars().all():
+            sc.is_active = False
+            self.session.add(sc)
+
+        # 软删除 universe
+        universe.is_active = False
+        self.session.add(universe)
+        await self.session.commit()
+        return True
+
     async def list_universes(self) -> list[Universe]:
         """列出所有宇宙"""
         result = await self.session.execute(
@@ -134,7 +161,7 @@ class UniverseService:
             self.session.add(project)
 
         await self.session.commit()
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[no-any-return]
 
     # ── 共享角色 ──────────────────────────────────────────────
 
@@ -317,6 +344,7 @@ class UniverseService:
                 continue
             # 如果 character_hints 中包含该角色名，自动导入
             if hints and sc.name in hints:
+                assert sc.id is not None
                 char = await self.import_shared_character_to_project(sc.id, project_id)
                 imported.append(char)
                 existing_names.add(sc.name)

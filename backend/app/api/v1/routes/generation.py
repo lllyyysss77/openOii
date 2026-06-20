@@ -102,6 +102,7 @@ async def generate_project(
     )
 
     if decision.kind == "active_conflict":
+        assert decision.run is not None
         control = await build_recovery_control_surface(
             session=session,
             database_url=settings.database_url,
@@ -114,6 +115,7 @@ async def generate_project(
         )
 
     if decision.kind == "recoverable_conflict":
+        assert decision.run is not None
         control = await build_recovery_control_surface(
             session=session,
             database_url=settings.database_url,

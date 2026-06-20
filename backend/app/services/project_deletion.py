@@ -150,7 +150,11 @@ async def delete_projects_by_ids(session: AsyncSession, project_ids: list[int]) 
 
     # 去重并保持稳定顺序，避免重复删除导致额外无效 SQL
     seen: set[int] = set()
-    unique_ids = [pid for pid in project_ids if pid not in seen and not seen.add(pid)]
+    unique_ids: list[int] = []
+    for pid in project_ids:
+        if pid not in seen:
+            seen.add(pid)
+            unique_ids.append(pid)
 
     for project_id in unique_ids:
         try:

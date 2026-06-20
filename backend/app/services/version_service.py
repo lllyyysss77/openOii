@@ -270,7 +270,7 @@ class VersionService:
         entity = await session.get(model, entity_id)
         if entity is None:
             raise NotFoundError(model.__name__, entity_id)
-        return entity.project_id
+        return entity.project_id  # type: ignore[no-any-return]
 
     def _apply_snapshot(self, entity: Any, snapshot: dict[str, Any], fields: Iterable[str]) -> None:
         for field in fields:

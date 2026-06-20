@@ -40,7 +40,7 @@ class LLMService:
         if self._anthropic is not None:
             return self._anthropic
         try:
-            import anthropic  # type: ignore
+            import anthropic
         except ModuleNotFoundError as exc:  # pragma: no cover
             raise RuntimeError(
                 "Missing dependency `anthropic`. Run `uv sync` to install."

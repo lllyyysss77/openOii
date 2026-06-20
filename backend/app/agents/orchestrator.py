@@ -184,7 +184,7 @@ async def get_awaiting_payload(run_id: int) -> dict | None:
     if not raw:
         return None
     try:
-        return _json.loads(raw)
+        return _json.loads(raw)  # type: ignore[no-any-return]
     except Exception:
         return None
 
@@ -1023,24 +1023,26 @@ class GenerationOrchestrator:
             ctx = self._build_agent_context(project=project, run=run, request=request)
 
             # 初始化当前 run 已存在的用户反馈消息（避免后续确认不带反馈时误读历史反馈）
-            res = await ctx.session.execute(
+            stmt = (
                 select(AgentMessage.id)
                 .where(AgentMessage.run_id == run.id)
                 .where(AgentMessage.role == "user")
                 .order_by(AgentMessage.created_at.desc())
                 .limit(1)
             )
+            res = await ctx.session.execute(stmt)
             self._last_user_feedback_id = res.scalar_one_or_none()
 
             if agent_name == "review":
                 # 让后续 agent 能直接读取用户反馈（例如编剧需要遵循数量限制等）
-                res = await ctx.session.execute(
+                stmt = (
                     select(AgentMessage)
                     .where(AgentMessage.run_id == run.id)
                     .where(AgentMessage.role == "user")
-                    .order_by(AgentMessage.created_at.desc())
+                .order_by(AgentMessage.created_at.desc())
                     .limit(1)
                 )
+                res = await ctx.session.execute(stmt)
                 msg = res.scalars().first()
                 if msg and msg.content.strip():
                     ctx.user_feedback = msg.content.strip()
@@ -1051,7 +1053,7 @@ class GenerationOrchestrator:
                 ctx.entity_type = entity_type
                 ctx.entity_id = entity_id
 
-                review_agent = self.agents[self._agent_index("review")]
+                review_agent = cast(ReviewRuleEngine, self.agents[self._agent_index("review")])
 
                 await self._set_run(run, current_agent=review_agent.name, progress=0.0)
                 await self.ws.send_event(

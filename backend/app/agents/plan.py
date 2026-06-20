@@ -69,7 +69,7 @@ def _extract_visual_notes(item: dict) -> str | None:
 
 def _compose_image_prompt(shot_data: dict, visual_bible: str) -> str:
     if isinstance(shot_data.get("image_prompt"), str) and shot_data["image_prompt"].strip():
-        return shot_data["image_prompt"].strip()
+        return shot_data["image_prompt"].strip()  # type: ignore[no-any-return]
 
     parts = []
     scene = shot_data.get("scene")
@@ -94,12 +94,12 @@ def _compose_image_prompt(shot_data: dict, visual_bible: str) -> str:
             composed = f"{composed}。{visual_bible}"
         return composed
 
-    return shot_data.get("description", "")
+    return shot_data.get("description", "")  # type: ignore[no-any-return]
 
 
 def _compose_video_prompt(shot_data: dict) -> str:
     if isinstance(shot_data.get("video_prompt"), str) and shot_data["video_prompt"].strip():
-        return shot_data["video_prompt"].strip()
+        return shot_data["video_prompt"].strip()  # type: ignore[no-any-return]
 
     parts = []
     camera = shot_data.get("camera")
@@ -112,7 +112,7 @@ def _compose_video_prompt(shot_data: dict) -> str:
     if parts:
         return "，".join(parts)
 
-    return shot_data.get("description", "")
+    return shot_data.get("description", "")  # type: ignore[no-any-return]
 
 
 def _optional_text(value: Any) -> str | None:
@@ -424,7 +424,7 @@ class PlanAgent(BaseAgent):
                                     },
                                 },
                             )
-                        existing_shot.order = shot_order
+                        existing_shot.order = shot_order  # type: ignore[assignment]
                         for key, value in fields.items():
                             if key not in {"project_id", "video_url", "image_url"}:
                                 setattr(existing_shot, key, value)
@@ -587,7 +587,6 @@ class PlanAgent(BaseAgent):
             for char in final_chars:
                 await self.send_character_event(ctx, char, "character_updated")
 
-            char_names = [c.name for c in final_chars]
             ctx.completion_info = CompletionInfo(
                 completed=user_message or "角色增量更新完成",
                 details=f"更新后共 {len(final_chars)} 个角色",

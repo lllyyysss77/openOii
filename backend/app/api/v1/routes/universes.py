@@ -42,7 +42,7 @@ def _universe_read(universe: Universe, projects_count: int = 0, shared_character
     ).model_dump(mode="json")
 
 
-def _shared_character_read(sc: SharedCharacter) -> dict:
+def _shared_character_read(sc: SharedCharacter) -> SharedCharacterRead:
     return SharedCharacterRead(
         id=sc.id,
         universe_id=sc.universe_id,
@@ -51,7 +51,7 @@ def _shared_character_read(sc: SharedCharacter) -> dict:
         visual_notes=sc.visual_notes,
         canonical_image_url=sc.canonical_image_url,
         reference_images=sc.reference_images or [],
-        face_embedding=sc.face_embedding,
+        face_embedding=sc.face_embedding,  # type: ignore[call-arg]
         character_tags=sc.character_tags,
         source_project_id=sc.source_project_id,
         source_character_id=sc.source_character_id,
@@ -187,6 +187,17 @@ async def update_universe(
     shared_characters_count = sc_result.scalar() or 0
 
     return _universe_read(universe, projects_count, shared_characters_count)
+
+
+@router.delete("/{universe_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_universe(
+    universe_id: int,
+    session: AsyncSession = SessionDep,
+):
+    """删除 IP 宇宙（软删除，清除关联项目的外键引用）"""
+    universe = await get_or_404(session, Universe, universe_id)
+    svc = UniverseService(session)
+    await svc.delete_universe(universe)
 
 
 # ── Universe-Project 关联 ─────────────────────────────────────

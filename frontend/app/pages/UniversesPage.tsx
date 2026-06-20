@@ -6,6 +6,7 @@ import { Button } from "~/components/ui/Button";
 import { Card } from "~/components/ui/Card";
 import { Input } from "~/components/ui/Input";
 import { Modal } from "~/components/ui/Modal";
+import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import { GlobeAltIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { toast } from "~/utils/toast";
 import type { Universe } from "~/types";
@@ -14,6 +15,7 @@ import { Link } from "react-router-dom";
 export function UniversesPage() {
 	const queryClient = useQueryClient();
 	const [showCreate, setShowCreate] = useState(false);
+	const [deleteTarget, setDeleteTarget] = useState<Universe | null>(null);
 	const [createForm, setCreateForm] = useState({
 		name: "",
 		description: "",
@@ -40,6 +42,24 @@ export function UniversesPage() {
 		onError: (error: Error) => {
 			toast.error({
 				title: "创建失败",
+				message: error.message || "未知错误",
+			});
+		},
+	});
+
+	const deleteMutation = useMutation({
+		mutationFn: universesApi.delete,
+		onSuccess: (_data: void, _variables: number) => {
+			queryClient.invalidateQueries({ queryKey: ["universes"] });
+			toast.success({
+				title: "删除成功",
+				message: "IP 宇宙已删除",
+			});
+			setDeleteTarget(null);
+		},
+		onError: (error: Error) => {
+			toast.error({
+				title: "删除失败",
 				message: error.message || "未知错误",
 			});
 		},
@@ -120,7 +140,7 @@ export function UniversesPage() {
 				{!isLoading && universes.length > 0 && (
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 						{universes.map((u) => (
-							<UniverseCard key={u.id} universe={u} />
+							<UniverseCard key={u.id} universe={u} onDelete={setDeleteTarget} />
 						))}
 					</div>
 				)}
@@ -207,6 +227,20 @@ export function UniversesPage() {
 					</div>
 				</Modal>
 			)}
+
+		{/* Delete confirm modal */}
+		{deleteTarget && (
+			<ConfirmModal
+				isOpen={true}
+				onClose={() => setDeleteTarget(null)}
+				onConfirm={() => deleteMutation.mutate(deleteTarget.id)}
+				title="删除 IP 宇宙"
+				message={`确定要删除宇宙「${deleteTarget.name}」吗？此操作不可撤销。关联的项目将被保留但不再属于该宇宙。`}
+				confirmText="删除"
+				variant="danger"
+				isLoading={deleteMutation.isPending}
+			/>
+		)}
 		</div>
 	);
 }

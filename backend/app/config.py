@@ -312,4 +312,4 @@ def apply_settings_overrides(overrides: dict[str, Any]) -> None:
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings(_env_file=".env", _env_file_encoding="utf-8")
+    return Settings(_env_file=".env", _env_file_encoding="utf-8")  # type: ignore[call-arg]

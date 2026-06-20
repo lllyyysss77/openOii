@@ -266,6 +266,7 @@ async def get_character_bible(
         except (_json.JSONDecodeError, ValueError):
             pass
 
+    assert character.id is not None
     return CharacterBibleRead(
         character_id=character.id,
         name=character.name,
@@ -302,6 +303,7 @@ async def update_character_bible(
 
     await _send_bible_updated_event(ws, character, visual_notes_updated=visual_notes_updated)
 
+    assert character.id is not None
     return CharacterBibleRead(
         character_id=character.id,
         name=character.name,
@@ -336,6 +338,7 @@ async def add_reference_image(
 
     await _send_bible_updated_event(ws, character)
 
+    assert character.id is not None
     return CharacterBibleRead(
         character_id=character.id,
         name=character.name,

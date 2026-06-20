@@ -146,7 +146,7 @@ async def get_project(
 @router.get("/{project_id}/outline", response_model=StoryOutlineRead | None)
 async def get_project_outline(project_id: int, session: AsyncSession = SessionDep):
     project = await get_or_404(session, Project, project_id)
-    if not isinstance(project.story_outline, dict):
+    if not project.story_outline:
         return None
     return StoryOutlineRead.model_validate(project.story_outline)
 

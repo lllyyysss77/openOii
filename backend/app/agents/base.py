@@ -115,6 +115,7 @@ class BaseAgent:
         await ctx.session.commit()
 
         # 发送 WebSocket 事件
+        assert ctx.project.id is not None
         await ctx.ws.send_event(
             ctx.project.id,
             {"type": "run_message", "data": data},
@@ -155,6 +156,7 @@ class BaseAgent:
 
         try:
             # 1. Send dedicated agent_thinking WS event
+            assert ctx.project.id is not None
             await ctx.ws.send_event(
                 ctx.project.id,
                 {
@@ -189,6 +191,7 @@ class BaseAgent:
         self, ctx: AgentContext, character: Any, event_type: str = "character_created"
     ) -> None:
         """发送角色创建/更新事件"""
+        assert ctx.project.id is not None
         payload = CharacterRead.model_validate(character).model_dump(mode="json")
         await ctx.ws.send_event(
             ctx.project.id,
@@ -202,6 +205,7 @@ class BaseAgent:
         self, ctx: AgentContext, shot: Any, event_type: str = "shot_created"
     ) -> None:
         """发送分镜创建/更新事件"""
+        assert ctx.project.id is not None
         payload = ShotRead.model_validate(shot).model_dump(mode="json")
         await ctx.ws.send_event(
             ctx.project.id,

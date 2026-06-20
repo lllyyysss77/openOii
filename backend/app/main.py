@@ -135,13 +135,15 @@ def create_app() -> FastAPI:
                 from sqlalchemy import select
 
                 async with async_session_maker() as session:
-                    res = await session.execute(
+                    stmt = (
                         select(AgentRun)
-                        .where(AgentRun.project_id == project_id)
-                        .where(AgentRun.status == "running")
-                        .order_by(AgentRun.created_at.desc())
+                        .where(AgentRun.project_id == project_id)  # type: ignore[arg-type]
+                        .where(AgentRun.status == "running")  # type: ignore[arg-type]
+                        .order_by(AgentRun.created_at.desc())  # type: ignore[attr-defined]
                     )
+                    res = await session.execute(stmt)
                     for run in res.scalars().all():
+                        assert run.id is not None
                         payload = await get_awaiting_payload(run.id)
                         if payload:
                             await ws_manager.send_event(
@@ -201,8 +203,8 @@ def create_app() -> FastAPI:
 
                                     content = feedback.strip()
                                     async with async_session_maker() as session:
-                                        run = await session.get(AgentRun, run_id)
-                                        if run and run.project_id == project_id:
+                                        agent_run = await session.get(AgentRun, run_id)
+                                        if agent_run and agent_run.project_id == project_id:
                                             session.add(
                                                 AgentMessage(
                                                     run_id=run_id,

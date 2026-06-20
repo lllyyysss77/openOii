@@ -179,7 +179,7 @@ class VideoService:
                 progress = data.get("progress")
 
                 if status in {"completed", "succeeded", "success", "done"}:
-                    return data
+                    return data  # type: ignore[no-any-return]
                 if status in {"failed", "error", "cancelled", "canceled"}:
                     error = data.get("error")
                     error_msg = (
@@ -240,7 +240,7 @@ class VideoService:
                         delay_s = min(delay_s * 2, 8.0)
                         continue
                     res.raise_for_status()
-                    return res.json()
+                    return res.json()  # type: ignore[no-any-return]
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                     last_exc = exc
                     if attempt >= self.max_retries:
@@ -375,7 +375,7 @@ class VideoService:
 
             # Chat Completions 风格（图生视频）
             if "/chat/completions" in self.settings.video_endpoint:
-                payload: dict[str, Any] = {
+                payload = {
                     "model": self.settings.video_model,
                     "messages": [
                         {
@@ -432,7 +432,7 @@ class VideoService:
         # 文生视频模式（原有逻辑）
         # Chat Completions 风格需要流式模式
         if "/chat/completions" in self.settings.video_endpoint:
-            payload: dict[str, Any] = {
+            payload = {
                 "model": self.settings.video_model,
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": True,

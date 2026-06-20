@@ -612,6 +612,9 @@ export const universesApi = {
 			body: JSON.stringify(data),
 		}),
 
+	delete: (id: number) =>
+		fetchApi<void>(`/api/v1/universes/${id}`, { method: "DELETE" }),
+
 	addProject: (
 		universeId: number,
 		projectId: number,

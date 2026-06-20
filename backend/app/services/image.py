@@ -416,7 +416,7 @@ class ImageService:
                 if status == "SUCCEED":
                     output_images = data.get("output_images", [])
                     if output_images:
-                        return output_images[0]
+                        return output_images[0]  # type: ignore[no-any-return]
                     raise RuntimeError(f"ModelScope task succeeded but no images: {data}")
                 elif status == "FAILED":
                     raise RuntimeError(f"ModelScope image generation failed: {data}")
@@ -441,7 +441,7 @@ class ImageService:
                         delay_s = min(delay_s * 2, 8.0)
                         continue
                     res.raise_for_status()
-                    return res.json()
+                    return res.json()  # type: ignore[no-any-return]
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                     last_exc = exc
                     if attempt >= self.max_retries:
@@ -549,15 +549,16 @@ class ImageService:
 
         url = self._build_url()
 
+        payload: dict[str, Any]
         if "/chat/completions" in self.settings.image_endpoint:
-            payload: dict[str, Any] = {
+            payload = {
                 "model": self.settings.image_model,
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": stream,
                 **kwargs,
             }
         else:
-            payload: dict[str, Any] = {
+            payload = {
                 "model": self.settings.image_model,
                 "prompt": prompt,
                 "size": size,
@@ -610,15 +611,14 @@ class ImageService:
                                 ],
                             }
                         ],
-                        "stream": True,
                         **kwargs,
                     }
-                    content = await self._post_stream_with_retry(url, payload)
-
+                    data = await self._post_json_with_retry(url, payload)
+                    content = data["choices"][0]["message"]["content"]
                     extracted = self._extract_url_from_text(content)
                     if extracted:
                         return extracted
-                    raise RuntimeError(f"Image API stream response missing URL: {content}")
+                    raise RuntimeError(f"Image API response missing URL: {content}")
                 else:
                     # 标准图片生成接口（图生图）
                     payload = {
@@ -645,20 +645,20 @@ class ImageService:
                 )
 
         # 文生图（原有逻辑）
-        # Chat Completions 风格（流式模式）
+        # Chat Completions 风格（非流式，gpt-image-2 不支持 SSE）
         if "/chat/completions" in self.settings.image_endpoint:
             payload = {
                 "model": self.settings.image_model,
                 "messages": [{"role": "user", "content": prompt}],
-                "stream": True,
                 **kwargs,
             }
-            content = await self._post_stream_with_retry(url, payload)
+            data = await self._post_json_with_retry(url, payload)
+            content = data["choices"][0]["message"]["content"]
 
             extracted = self._extract_url_from_text(content)
             if extracted:
                 return extracted
-            raise RuntimeError(f"Image API stream response missing URL: {content}")
+            raise RuntimeError(f"Image API response missing URL: {content}")
 
         # DALL-E 风格（非流式）
         data = await self.generate(prompt=prompt, size=size, response_format="url", **kwargs)

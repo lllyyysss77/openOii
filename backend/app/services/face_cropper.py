@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # InsightFace 模型首次加载会自动下载 buffalo_l 模型（~300MB）
 # 后续使用从缓存读取
-_FACE_ANALYSIS_APP = None
+_FACE_ANALYSIS_APP: object | None = None
 _INIT_ATTEMPTED = False
 
 

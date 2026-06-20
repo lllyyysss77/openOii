@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import random
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, NoReturn
 
 import httpx
 
@@ -65,7 +65,7 @@ class TextService:
         last_status: int | None,
         last_body: str | None,
         context: str = "Text generation request",
-    ) -> None:
+    ) -> NoReturn:
         """Raise the appropriate TextServiceError subclass based on status code."""
         if last_status in (401, 403):
             raise TextServiceAuthError(
@@ -107,7 +107,7 @@ class TextService:
                 try:
                     res = await client.post(url, headers=self.settings.text_headers(), json=payload)
                     res.raise_for_status()
-                    return res.json()
+                    return res.json()  # type: ignore[no-any-return]
 
                 except httpx.HTTPStatusError as exc:
                     last_exc = exc

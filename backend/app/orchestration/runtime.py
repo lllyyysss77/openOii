@@ -44,12 +44,12 @@ async def build_stage_recovery_config(
         async for snapshot in graph.aget_state_history(config, limit=limit):
             next_nodes = getattr(snapshot, "next", ())
             if next_nodes and next_nodes[0] == before_stage:
-                return snapshot.config
+                return snapshot.config  # type: ignore[no-any-return]
     else:
         for snapshot in graph.get_state_history(config, limit=limit):
             next_nodes = getattr(snapshot, "next", ())
             if next_nodes and next_nodes[0] == before_stage:
-                return snapshot.config
+                return snapshot.config  # type: ignore[no-any-return]
     return config
 
 

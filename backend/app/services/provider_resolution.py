@@ -48,7 +48,7 @@ def _provider_snapshot_payload(snapshot: object) -> dict[str, object] | None:
         return snapshot
     if hasattr(snapshot, "model_dump"):
         try:
-            dumped = snapshot.model_dump(mode="json")  # type: ignore[attr-defined]
+            dumped = snapshot.model_dump(mode="json")
         except Exception:
             return None
         if isinstance(dumped, dict):
@@ -133,6 +133,7 @@ async def probe_text_provider(settings: Settings) -> TextProviderCapability:
         update={"request_timeout_s": min(settings.request_timeout_s, TEXT_PROBE_TIMEOUT_S)}
     )
 
+    service: LLMService | TextService
     if probe_settings.text_provider == "anthropic":
         service = LLMService(probe_settings, max_retries=TEXT_PROBE_MAX_RETRIES)
     elif probe_settings.text_provider == "openai":
@@ -140,7 +141,7 @@ async def probe_text_provider(settings: Settings) -> TextProviderCapability:
     elif probe_settings.text_provider == "fake":
         from app.services.fake_text import FakeTextService
 
-        service = FakeTextService(probe_settings)
+        service = FakeTextService(probe_settings)  # type: ignore[assignment]
     else:
         result = TextProviderCapability(
             status="invalid",

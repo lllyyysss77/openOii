@@ -190,7 +190,7 @@ async def test_connection(
     elif payload.service == "video":
         return await _test_video_connection(settings)
 
-    return TestConnectionResponse(success=False, message="未知服务类型")
+    return TestConnectionResponse(success=False, message="未知服务类型")  # type: ignore[unreachable]
 
 
 async def _test_llm_connection(settings) -> TestConnectionResponse:

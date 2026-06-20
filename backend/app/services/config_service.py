@@ -299,6 +299,7 @@ class ConfigService:
         results: list[dict[str, Any]] = []
         for key in keys:
             item = db_map.get(key)
+            value: str | None
             if item:
                 value = item.value
                 is_sensitive = item.is_sensitive or is_sensitive_key(key)
@@ -315,7 +316,7 @@ class ConfigService:
                 is_sensitive = is_sensitive_key(key)
                 source = "default"
             if is_sensitive and value is not None:
-                display_value = mask_value(value)
+                display_value: str | None = mask_value(value)
                 is_masked = True
             else:
                 display_value = value

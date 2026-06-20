@@ -110,8 +110,8 @@ def infer_feedback_targets(data: dict[str, Any], state: dict[str, Any]) -> Targe
     if not target_items:
         return None
 
-    character_ids: list[int] = []
-    shot_ids: list[int] = []
+    parsed_character_ids: list[int] = []
+    parsed_shot_ids: list[int] = []
     characters = state.get("characters") if isinstance(state, dict) else []
     shots = state.get("shots") if isinstance(state, dict) else []
 
@@ -120,17 +120,17 @@ def infer_feedback_targets(data: dict[str, Any], state: dict[str, Any]) -> Targe
             name = character.get("name") if isinstance(character, dict) else None
             character_id = character.get("id") if isinstance(character, dict) else None
             if isinstance(name, str) and isinstance(character_id, int) and name and name in item:
-                character_ids.append(character_id)
+                parsed_character_ids.append(character_id)
         for shot in shots if isinstance(shots, list) else []:
             shot_id = shot.get("id") if isinstance(shot, dict) else None
             order = shot.get("order") if isinstance(shot, dict) else None
             if isinstance(shot_id, int) and isinstance(order, int) and f"镜头{order}" in item:
-                shot_ids.append(shot_id)
+                parsed_shot_ids.append(shot_id)
             elif isinstance(shot_id, int) and isinstance(order, int) and f"分镜{order}" in item:
-                shot_ids.append(shot_id)
+                parsed_shot_ids.append(shot_id)
 
-    character_ids = list(dict.fromkeys(character_ids))
-    shot_ids = list(dict.fromkeys(shot_ids))
+    character_ids = list(dict.fromkeys(parsed_character_ids))
+    shot_ids = list(dict.fromkeys(parsed_shot_ids))
     if character_ids or shot_ids:
         return TargetIds(character_ids=character_ids, shot_ids=shot_ids)
     return None

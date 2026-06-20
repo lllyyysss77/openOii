@@ -409,8 +409,8 @@ class ExportService:
             title_font = ImageFont.truetype(font_path or "", 36)
             label_font = ImageFont.truetype(font_path or "", 18)
         except Exception:
-            title_font = ImageFont.load_default()
-            label_font = ImageFont.load_default()
+            title_font = ImageFont.load_default()  # type: ignore[assignment]
+            label_font = ImageFont.load_default()  # type: ignore[assignment]
 
         # ---- 标题条 ----
         draw.rectangle([0, 0, TARGET_WIDTH, TITLE_BAR_HEIGHT], fill=(30, 30, 30))
@@ -504,7 +504,7 @@ class ExportService:
             font = ImageFont.truetype(font_path or "", 22)
             small_font = ImageFont.truetype(font_path or "", 16)
         except Exception:
-            font = ImageFont.load_default()
+            font = ImageFont.load_default()  # type: ignore[assignment]
             small_font = font
 
         # 构建显示文本
@@ -529,7 +529,7 @@ class ExportService:
         for line in wrapped_lines:
             bbox = draw.textbbox((0, 0), line, font=font)
             lw = bbox[2] - bbox[0]
-            max_line_w = max(max_line_w, lw)
+            max_line_w = max(max_line_w, int(lw))
         bubble_w = max_line_w + 2 * padding + 8
 
         # 气泡位置（底部居中）

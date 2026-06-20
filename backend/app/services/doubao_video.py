@@ -10,7 +10,7 @@ import asyncio
 import base64
 import logging
 import mimetypes
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 import httpx
 
@@ -124,7 +124,7 @@ class DoubaoVideoService:
                         delay_s = min(delay_s * 2, 16.0)
                         continue
                     res.raise_for_status()
-                    return res.json()
+                    return res.json()  # type: ignore[no-any-return]
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                     last_exc = exc
                     if attempt >= self.max_retries:
@@ -214,7 +214,7 @@ class DoubaoVideoService:
             raise RuntimeError(f"Doubao API response missing task ID: {result}")
 
         logger.info(f"Doubao video task created: {task_id}")
-        return task_id
+        return task_id  # type: ignore[no-any-return]
 
     async def query_task(self, task_id: str) -> dict[str, Any]:
         """查询任务状态
@@ -232,7 +232,7 @@ class DoubaoVideoService:
         self,
         task_id: str,
         *,
-        on_progress: callable | None = None,
+        on_progress: Callable[[str, float], None] | None = None,
     ) -> dict[str, Any]:
         """等待任务完成
 
@@ -284,7 +284,7 @@ class DoubaoVideoService:
         generate_audio: bool = True,
         watermark: bool = False,
         model: str | None = None,
-        on_progress: callable | None = None,
+        on_progress: Callable[[str, float], None] | None = None,
     ) -> str:
         """生成视频并返回 URL（一站式接口）
 
@@ -327,7 +327,7 @@ class DoubaoVideoService:
             raise RuntimeError(f"Doubao API response missing video URL: {result}")
 
         logger.info(f"Doubao video generated: {video_url[:100]}...")
-        return video_url
+        return video_url  # type: ignore[no-any-return]
 
     async def generate_url_from_bytes(
         self,
@@ -340,7 +340,7 @@ class DoubaoVideoService:
         generate_audio: bool = True,
         watermark: bool = False,
         model: str | None = None,
-        on_progress: callable | None = None,
+        on_progress: Callable[[str, float], None] | None = None,
     ) -> str:
         """从图片字节流生成视频
 

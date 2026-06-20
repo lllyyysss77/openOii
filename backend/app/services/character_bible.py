@@ -85,7 +85,7 @@ async def compute_face_embedding(image_url: str) -> list[float] | None:
     if hasattr(embedding, "tolist"):
         embedding = embedding.tolist()
 
-    return embedding
+    return embedding  # type: ignore[no-any-return]
 
 
 async def find_similar_characters(
@@ -185,7 +185,7 @@ async def auto_populate_visual_notes(
 
         visual_notes = final.text.strip()
         if visual_notes:
-            return visual_notes
+            return visual_notes  # type: ignore[no-any-return]
         return None
     except Exception as e:
         logger.warning("Failed to auto-populate visual notes for %s: %s", character.name, e)

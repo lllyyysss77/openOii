@@ -268,7 +268,7 @@ class ConsistencyEvalService:
         embedding = best_face["embedding"]
         # Convert numpy array to list if needed
         if hasattr(embedding, "tolist"):
-            return embedding.tolist()
+            return embedding.tolist()  # type: ignore[no-any-return]
         return list(embedding)
 
     async def _get_character_embedding(self, character: Character) -> list[float] | None:
@@ -279,7 +279,7 @@ class ConsistencyEvalService:
         """
         if character.face_embedding:
             try:
-                return json.loads(character.face_embedding)
+                return json.loads(character.face_embedding)  # type: ignore[no-any-return]
             except (json.JSONDecodeError, TypeError):
                 logger.warning(
                     "Failed to parse face_embedding for character %d", character.id
