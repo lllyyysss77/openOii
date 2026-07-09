@@ -201,39 +201,10 @@ class PlanAgent(BaseAgent):
 
     async def _get_universe_context(self, ctx: AgentContext) -> dict | None:
         """If project belongs to a universe, return universe context for LLM."""
-        if not getattr(ctx.project, "universe_id", None):
-            return None
         try:
-            from app.models.universe import Universe
-            from app.services.universe_service import UniverseService
+            from app.services.universe_context import build_universe_context
 
-            universe = await ctx.session.get(Universe, ctx.project.universe_id)
-            if not universe:
-                return None
-
-            svc = UniverseService(ctx.session)
-            shared_chars = await svc.get_universe_shared_characters(universe.id)
-
-            result: dict[str, Any] = {
-                "universe_name": universe.name,
-                "universe_id": universe.id,
-            }
-            if universe.world_setting:
-                result["world_setting"] = universe.world_setting
-            if universe.style_rules:
-                result["style_rules"] = universe.style_rules
-            if shared_chars:
-                result["shared_characters"] = [
-                    {
-                        "name": sc.name,
-                        "description": sc.description,
-                        "visual_notes": sc.visual_notes,
-                        "canonical_image_url": sc.canonical_image_url,
-                        "tags": sc.character_tags,
-                    }
-                    for sc in shared_chars
-                ]
-            return result
+            return await build_universe_context(ctx.session, ctx.project, include_siblings=True)
         except Exception:
             return None
 

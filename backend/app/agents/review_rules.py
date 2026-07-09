@@ -179,19 +179,37 @@ class ReviewRuleEngine(BaseAgent):
             await self.send_message(ctx, "未找到用户反馈内容，将从规划阶段重新开始。")
             return {"start_agent": "plan", "mode": "full", "reason": "未提供具体反馈"}
 
-        if ctx.entity_type and ctx.entity_id:
+        multi_ids = [
+            int(i)
+            for i in (getattr(ctx, "entity_ids", None) or [])
+            if isinstance(i, int) or (isinstance(i, str) and str(i).isdigit())
+        ]
+        if ctx.entity_id is not None and ctx.entity_id not in multi_ids:
+            multi_ids = [ctx.entity_id, *multi_ids]
+        multi_ids = list(dict.fromkeys(multi_ids))
+
+        if ctx.entity_type and multi_ids:
             start_agent = resolve_entity_start_agent(ctx.entity_type, feedback)
             mode = "incremental"
             if _is_full_restart_feedback(feedback):
                 mode = "full"
-            target_ids = _entity_target_ids(ctx.entity_type, ctx.entity_id)
-
             if ctx.entity_type == "character":
-                entity_desc = f"角色#{ctx.entity_id}"
-            elif ctx.entity_type == "video":
-                entity_desc = f"分镜视频#{ctx.entity_id}"
+                target_ids = TargetIds(character_ids=multi_ids, shot_ids=[])
+                entity_desc = (
+                    f"角色#{multi_ids[0]}"
+                    if len(multi_ids) == 1
+                    else f"{len(multi_ids)} 个角色"
+                )
+            elif ctx.entity_type in {"shot", "video"}:
+                target_ids = TargetIds(character_ids=[], shot_ids=multi_ids)
+                entity_desc = (
+                    f"格/分镜#{multi_ids[0]}"
+                    if len(multi_ids) == 1
+                    else f"{len(multi_ids)} 个分镜格"
+                )
             else:
-                entity_desc = f"分镜#{ctx.entity_id}"
+                target_ids = _entity_target_ids(ctx.entity_type, multi_ids[0])
+                entity_desc = f"{ctx.entity_type}#{multi_ids[0]}"
 
             stage_label = {
                 "plan": "规划文案",
@@ -204,13 +222,19 @@ class ReviewRuleEngine(BaseAgent):
                 summary=f"更新{entity_desc}",
             )
             # Help plan/render agents know which entity the user selected
-            focus_prefix = f"[focus:{ctx.entity_type}:{ctx.entity_id}] "
+            focus_ids = ",".join(str(i) for i in multi_ids)
+            focus_prefix = f"[focus:{ctx.entity_type}:{focus_ids}] "
             if not feedback.startswith("[focus:"):
                 ctx.user_feedback = f"{focus_prefix}{feedback}"
+            if ctx.entity_id is None:
+                ctx.entity_id = multi_ids[0]
             return {
                 "start_agent": start_agent,
                 "mode": mode,
-                "reason": f"per-entity: {ctx.entity_type}#{ctx.entity_id} → {start_agent}",
+                "reason": (
+                    f"per-entity: {ctx.entity_type}#"
+                    f"{focus_ids} → {start_agent}"
+                ),
                 "target_ids": target_ids,
             }
 

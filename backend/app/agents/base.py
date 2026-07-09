@@ -59,7 +59,8 @@ class AgentContext:
     user_feedback: str | None = None
     feedback_type: str | None = None  # "plan" | "character" | "shot" | "compose"
     entity_type: str | None = None  # "character" | "shot"
-    entity_id: int | None = None  # per-entity feedback target
+    entity_id: int | None = None  # primary per-entity feedback target
+    entity_ids: list[int] | None = None  # multi-select 九宫格 / cast targets
     skill_id: str | None = None  # durable skill policy for LLM injection
     rerun_mode: str = "full"  # "full" or "incremental"
     target_ids: TargetIds | None = None  # 精细化控制的目标 ID

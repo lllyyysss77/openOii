@@ -102,6 +102,7 @@ export function ProjectPage() {
 	const [sidebarTab, setSidebarTab] = useState<WorkspaceSidebarTab>("chat");
 	const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false);
 	const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+	const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
 	const [lastRunStatus, setLastRunStatus] =
 		useState<LastRunTerminalStatus>(null);
 	const [versionOpen, setVersionOpen] = useState(false);
@@ -270,6 +271,7 @@ export function ProjectPage() {
 		editorStore.setBlockingClips(null);
 		setLastRunStatus(null);
 		setSelectedNodeId(null);
+		setSelectedNodeIds([]);
 		setSidebarTab("chat");
 	}, [projectId]);
 
@@ -359,6 +361,7 @@ export function ProjectPage() {
 			content: string;
 			entityType?: string;
 			entityId?: number;
+			entityIds?: number[];
 		}) =>
 			projectsApi.feedback(
 				projectId,
@@ -367,6 +370,7 @@ export function ProjectPage() {
 				feedbackTypeForStage(storeCurrentStage),
 				payload.entityType,
 				payload.entityId,
+				payload.entityIds?.length ? payload.entityIds : undefined,
 			),
 		onError: (error: Error | ApiError) => {
 			const apiError = error instanceof ApiError ? error : null;
@@ -460,30 +464,48 @@ export function ProjectPage() {
 
 	const handleFeedback = (content: string) => {
 		setLastRunStatus(null);
-		// Bind canvas selection → Agent review context (Phase 2)
+		// Bind canvas selection → Agent review context (Phase 2 / multi-cell)
+		const ids = selectedNodeIds.length > 0
+			? selectedNodeIds
+			: selectedNodeId
+				? [selectedNodeId]
+				: [];
+		const shotIds = ids
+			.filter((id) => id.startsWith("shot:"))
+			.map((id) => Number(id.split(":")[1]))
+			.filter((n) => Number.isFinite(n));
+		const charIds = ids
+			.filter((id) => id.startsWith("character:"))
+			.map((id) => Number(id.split(":")[1]))
+			.filter((n) => Number.isFinite(n));
+
 		let entityType: string | undefined;
 		let entityId: number | undefined;
+		let entityIds: number[] | undefined;
 		let contextLabel = "";
-		if (selectedNodeId?.startsWith("character:")) {
-			const id = Number(selectedNodeId.split(":")[1]);
-			if (Number.isFinite(id)) {
-				entityType = "character";
-				entityId = id;
-				const char = storeCharacters.find((c) => c.id === id);
-				contextLabel = char?.name ? `（角色：${char.name}）` : `（角色 #${id}）`;
-			}
-		} else if (selectedNodeId?.startsWith("shot:")) {
-			const id = Number(selectedNodeId.split(":")[1]);
-			if (Number.isFinite(id)) {
-				entityType = "shot";
-				entityId = id;
-				const shot = storeShots.find((s) => s.id === id);
-				contextLabel = shot
-					? `（镜头 ${shot.order ?? id}）`
-					: `（镜头 #${id}）`;
-			}
+
+		if (shotIds.length > 0 && charIds.length === 0) {
+			entityType = "shot";
+			entityId = shotIds[0];
+			entityIds = shotIds;
+			contextLabel =
+				shotIds.length === 1
+					? `（格 · 镜头 ${storeShots.find((s) => s.id === shotIds[0])?.order ?? shotIds[0]}）`
+					: `（${shotIds.length} 个分镜格）`;
+		} else if (charIds.length > 0 && shotIds.length === 0) {
+			entityType = "character";
+			entityId = charIds[0];
+			entityIds = charIds;
+			const char = storeCharacters.find((c) => c.id === charIds[0]);
+			contextLabel =
+				charIds.length === 1
+					? char?.name
+						? `（角色：${char.name}）`
+						: `（角色 #${charIds[0]}）`
+					: `（${charIds.length} 个角色）`;
 		}
-		feedbackMutation.mutate({ content, entityType, entityId });
+
+		feedbackMutation.mutate({ content, entityType, entityId, entityIds });
 		useEditorStore.getState().addMessage({
 			agent: "user",
 			role: "user",
@@ -495,12 +517,35 @@ export function ProjectPage() {
 	const handleConfirm = (feedback?: string) => {
 		const runId = storeCurrentRunId;
 		if (runId) {
-			send({ type: "confirm", data: { run_id: runId, feedback } });
-			if (feedback) {
+			// Annotate gate confirm with canvas selection so backend review can scope
+			let annotated = feedback?.trim() || "";
+			if (annotated && selectedNodeIds.length > 0) {
+				const focus = selectedNodeIds
+					.map((id) => {
+						if (id.startsWith("shot:")) {
+							const sid = Number(id.split(":")[1]);
+							const shot = storeShots.find((s) => s.id === sid);
+							return `格${shot?.order ?? sid}`;
+						}
+						if (id.startsWith("character:")) {
+							const cid = Number(id.split(":")[1]);
+							const char = storeCharacters.find((c) => c.id === cid);
+							return char?.name || `角色${cid}`;
+						}
+						return id;
+					})
+					.join("、");
+				annotated = `${annotated}\n（绑定：${focus}）`;
+			}
+			send({
+				type: "confirm",
+				data: { run_id: runId, feedback: annotated || feedback },
+			});
+			if (annotated || feedback) {
 				useEditorStore.getState().addMessage({
 					agent: "user",
 					role: "user",
-					content: feedback,
+					content: annotated || feedback || "",
 					timestamp: new Date().toISOString(),
 				});
 			}
@@ -621,6 +666,17 @@ export function ProjectPage() {
 		}
 	}, []);
 
+	const handleSelectedNodeIdsChange = useCallback((nodeIds: string[]) => {
+		setSelectedNodeIds(nodeIds);
+		if (nodeIds[0]) {
+			setSelectedNodeId(nodeIds[0]);
+			setSidebarTab("inspector");
+			setWorkspaceCollapsed(false);
+		} else {
+			setSelectedNodeId(null);
+		}
+	}, []);
+
 	const workspaceLoading =
 		projectLoading ||
 		Boolean(project && (charactersLoading || shotsLoading || messagesLoading));
@@ -723,10 +779,16 @@ export function ProjectPage() {
 					collapsed={workspaceCollapsed}
 					onCollapsedChange={setWorkspaceCollapsed}
 					selectionLabel={
-						selectedWorkflowNode
-							? `${selectedWorkflowNode.kind} · ${selectedWorkflowNode.title}`
-							: null
+						selectedNodeIds.length > 1
+							? `多选 · ${selectedNodeIds.length} 项`
+							: selectedWorkflowNode
+								? selectedWorkflowNode.kind === "shot"
+									? `格 ${(selectedWorkflowNode as { gridCell?: number }).gridCell ?? selectedWorkflowNode.title} · ${selectedWorkflowNode.title}`
+									: `${selectedWorkflowNode.kind} · ${selectedWorkflowNode.title}`
+								: null
 					}
+					selectedNodeIds={selectedNodeIds}
+					universeId={project?.universe_id ?? null}
 					placement="left"
 				/>
 
@@ -734,6 +796,7 @@ export function ProjectPage() {
 					<StageView
 						projectId={projectId}
 						onSelectedNodeIdChange={handleSelectedNodeIdChange}
+						onSelectedNodeIdsChange={handleSelectedNodeIdsChange}
 					/>
 				</div>
 			</main>

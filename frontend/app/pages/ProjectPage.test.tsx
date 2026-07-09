@@ -880,6 +880,7 @@ describe('ProjectPage live hydration', () => {
         'plan',
         undefined,
         undefined,
+        undefined,
       );
     });
     expect(storeState.addMessage).toHaveBeenCalledWith(
@@ -910,6 +911,7 @@ describe('ProjectPage live hydration', () => {
         'render',
         undefined,
         undefined,
+        undefined,
       );
     });
   });
@@ -931,6 +933,7 @@ describe('ProjectPage live hydration', () => {
         '继续调整故事节奏',
         undefined,
         'compose',
+        undefined,
         undefined,
         undefined,
       );

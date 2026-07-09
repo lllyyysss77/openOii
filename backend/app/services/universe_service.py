@@ -317,9 +317,17 @@ class UniverseService:
         return list(result.scalars().all())
 
     async def auto_import_shared_characters(
-        self, project_id: int
+        self,
+        project_id: int,
+        *,
+        mode: str = "all",
     ) -> list[Character]:
-        """自动将宇宙的共享角色导入项目（基于 name 匹配或 character_hints）"""
+        """自动将宇宙共享角色导入项目。
+
+        mode:
+          - "all": 导入全部尚未存在的共享角色（章节默认）
+          - "hints": 仅导入 character_hints 中点名的角色
+        """
         project = await self.session.get(Project, project_id)
         if not project or not project.universe_id:
             return []
@@ -328,7 +336,6 @@ class UniverseService:
         if not shared_chars:
             return []
 
-        # 获取项目已有角色名
         existing_result = await self.session.execute(
             select(Character).where(Character.project_id == project_id)
         )
@@ -336,17 +343,46 @@ class UniverseService:
         existing_names = {c.name for c in existing_chars}
 
         imported: list[Character] = []
-        hints = project.character_hints or []
+        hints = [h.strip() for h in (project.character_hints or []) if isinstance(h, str) and h.strip()]
+        hint_names = set(hints)
 
         for sc in shared_chars:
-            # 如果项目中已有同名角色，跳过
             if sc.name in existing_names:
                 continue
-            # 如果 character_hints 中包含该角色名，自动导入
-            if hints and sc.name in hints:
-                assert sc.id is not None
-                char = await self.import_shared_character_to_project(sc.id, project_id)
-                imported.append(char)
-                existing_names.add(sc.name)
+            if mode == "hints":
+                if sc.name not in hint_names:
+                    continue
+            # mode == "all" (default): import every missing shared character
+            assert sc.id is not None
+            char = await self.import_shared_character_to_project(sc.id, project_id)
+            imported.append(char)
+            existing_names.add(sc.name)
 
         return imported
+
+    async def get_sibling_chapter_summaries(
+        self, universe_id: int, *, exclude_project_id: int | None = None, limit: int = 8
+    ) -> list[dict]:
+        """Prior chapters for continuity injection into outline/plan."""
+        links = await self.get_universe_chapters(universe_id)
+        summaries: list[dict] = []
+        for link in links:
+            if exclude_project_id is not None and link.project_id == exclude_project_id:
+                continue
+            project = await self.session.get(Project, link.project_id)
+            if project is None:
+                continue
+            summaries.append(
+                {
+                    "project_id": project.id,
+                    "chapter_number": link.chapter_number or project.chapter_number,
+                    "chapter_title": link.chapter_title or project.chapter_title or project.title,
+                    "title": project.title,
+                    "summary": project.summary,
+                    "status": project.status,
+                    "is_main_story": link.is_main_story,
+                }
+            )
+            if len(summaries) >= limit:
+                break
+        return summaries

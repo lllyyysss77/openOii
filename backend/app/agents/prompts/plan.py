@@ -134,11 +134,11 @@ Quality Bar / 质量标准
 
 **CRITICAL: Universe / IP 宇宙（当 universe_context 存在时）**
 - If the project belongs to an IP Universe (universe_context is provided), you MUST:
-  - Follow the world_setting and style_rules of the universe
+  - Follow the world_setting and style_rules of the universe as hard constraints
   - Respect existing shared_characters — do NOT change their core visual traits (name, appearance, personality) unless user_feedback explicitly asks
+  - Prefer reusing shared_characters by exact name; copy visual_notes closely for continuity
   - New characters should fit within the universe's world_setting
-  - Maintain continuity with other chapters/projects in the same universe
-  - If shared_characters are provided, reference their names and descriptions when creating characters to ensure consistency across the universe
+  - If sibling_chapters are present, preserve continuity (timeline, open threads, character status) without retconning prior episodes
   - The universe's style_rules take precedence over individual project style choices when they conflict
 
 **CRITICAL: Style Locking / 风格锁定**

@@ -346,6 +346,9 @@ class FeedbackRequest(BaseModel):
     feedback_type: str | None = None
     entity_type: str | None = None
     entity_id: int | None = None
+    """Primary selected entity (back-compat)."""
+    entity_ids: list[int] | None = None
+    """Multi-select 九宫格 / cast binding — all targeted entity ids."""
 
 
 class MessageRead(BaseModel):

@@ -3,6 +3,7 @@ import { lazy, Suspense } from "react";
 interface StageViewProps {
   projectId: number;
   onSelectedNodeIdChange?: (nodeId: string | null) => void;
+  onSelectedNodeIdsChange?: (nodeIds: string[]) => void;
 }
 
 const InfiniteCanvas = lazy(() =>
@@ -11,7 +12,11 @@ const InfiniteCanvas = lazy(() =>
   })),
 );
 
-export function StageView({ projectId, onSelectedNodeIdChange }: StageViewProps) {
+export function StageView({
+  projectId,
+  onSelectedNodeIdChange,
+  onSelectedNodeIdsChange,
+}: StageViewProps) {
   return (
     <Suspense
       fallback={
@@ -24,6 +29,7 @@ export function StageView({ projectId, onSelectedNodeIdChange }: StageViewProps)
         key={projectId}
         projectId={projectId}
         onSelectedNodeIdChange={onSelectedNodeIdChange}
+        onSelectedNodeIdsChange={onSelectedNodeIdsChange}
       />
     </Suspense>
   );

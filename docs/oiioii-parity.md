@@ -24,7 +24,8 @@
 | 2 | 画布选中 ↔ Agent 上下文 + feedback_entity feedback | ✅ |
 | 3 | Skill schema + catalog API 驱动编排入口 | ✅ **深度**：`Project.skill_id` 持久化、directives 注入 outline/plan、默认镜头数/模式 |
 | 4 | 拉片复刻（文本 brief 18 维 + 槽位替换） | ✅ **深度**：LLM keyword-only 修复、维度 UI、`reimagine_meta` 落库 |
-| 5a | 九宫格分镜 + 单格重做 | ✅ **深度**：feedback 应用 `target_ids`、scoped cleanup、反馈进 render prompt |
+| 5a | 九宫格分镜 + 单格重做 | ✅ **深度**：多选批量重做、排序重排 order、`entity_ids` 多格反馈 |
+| 宇宙 | IP 宇宙章节 + 共享角色 | ✅ **深度**：自动导入共享卡司、outline/render 宇宙上下文、提升/导入/编辑 UI |
 | 5b | 场景 Agent / 真视频上传多模态 / 画布图编 | 默认不做 |
 
 ### LangGraph 架构（2026 对齐）

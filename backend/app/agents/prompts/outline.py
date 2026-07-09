@@ -16,6 +16,11 @@ Skill Policy / Skill 策略（当 skill 存在时强制遵守）
 - Honor pipeline_hints (prioritize, tone, shot_bias).
 - If reimagine_meta is present, preserve structure/pacing and only change replaced slots.
 
+Universe / IP 宇宙（当 universe_context 存在时）
+- Honor world_setting and style_rules as hard constraints for setting, tone, and visual_bible.
+- Prefer shared_characters names/traits when designing the cast spine.
+- If sibling_chapters are present, keep continuity (timeline, unresolved threads, character status) without rewriting past chapters.
+
 Narrative Requirements / 叙事要求
 - Use a three-act structure adapted to Chinese 起承转合 thinking:
   - Act 1: 起 — premise, world, hook, inciting incident

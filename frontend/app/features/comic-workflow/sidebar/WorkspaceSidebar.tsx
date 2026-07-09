@@ -27,6 +27,10 @@ interface WorkspaceSidebarProps {
 	onCollapsedChange?: (collapsed: boolean) => void;
 	/** Optional selection label shown above chat (canvas → Agent binding). */
 	selectionLabel?: string | null;
+	/** Multi-select node ids from 九宫格 canvas. */
+	selectedNodeIds?: string[];
+	/** Project IP universe for promote/import actions. */
+	universeId?: number | null;
 	/** OiiOii-style default: agent chat on the left of canvas. */
 	placement?: "left" | "right";
 }
@@ -68,6 +72,8 @@ export function WorkspaceSidebar({
 	collapsed = false,
 	onCollapsedChange,
 	selectionLabel = null,
+	selectedNodeIds = [],
+	universeId = null,
 	placement = "left",
 }: WorkspaceSidebarProps) {
 	const tabRefs = useRef<Record<WorkspaceSidebarTab, HTMLButtonElement | null>>({
@@ -223,7 +229,9 @@ export function WorkspaceSidebar({
 					<WorkflowInspector
 						projectId={projectId}
 						selectedNode={selectedNode}
+						selectedNodeIds={selectedNodeIds}
 						structureLocked={structureLocked}
+						universeId={universeId}
 					/>
 				) : null}
 				{activeTab === "assets" ? (

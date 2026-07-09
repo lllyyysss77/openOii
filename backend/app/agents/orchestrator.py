@@ -1029,6 +1029,7 @@ class GenerationOrchestrator:
         feedback_type: str | None = None,
         entity_type: str | None = None,
         entity_id: int | None = None,
+        entity_ids: list[int] | None = None,
     ) -> None:
         project = await self.session.get(Project, project_id)
         run = await self.session.get(AgentRun, run_id)
@@ -1081,6 +1082,10 @@ class GenerationOrchestrator:
                 ctx.entity_type = entity_type
             if entity_id is not None and ctx.entity_id is None:
                 ctx.entity_id = entity_id
+            if entity_ids:
+                ctx.entity_ids = list(dict.fromkeys(entity_ids))
+                if ctx.entity_id is None and ctx.entity_ids:
+                    ctx.entity_id = ctx.entity_ids[0]
             if request.entity_type and not ctx.entity_type:
                 ctx.entity_type = request.entity_type
             if request.entity_id is not None and ctx.entity_id is None:
@@ -1116,6 +1121,10 @@ class GenerationOrchestrator:
                 ctx.feedback_type = feedback_type
                 ctx.entity_type = entity_type
                 ctx.entity_id = entity_id
+                if entity_ids:
+                    ctx.entity_ids = list(dict.fromkeys(entity_ids))
+                    if ctx.entity_id is None and ctx.entity_ids:
+                        ctx.entity_id = ctx.entity_ids[0]
 
                 review_agent = cast(ReviewRuleEngine, self.agents[self._agent_index("review")])
 

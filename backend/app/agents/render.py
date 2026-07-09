@@ -49,6 +49,20 @@ class RenderAgent(BaseAgent):
         resolved = await resolve_style_prompt(session, style)
         return resolved.style_prompt, resolved.negative_prompt
 
+    async def _universe_style_lock(self, ctx: AgentContext) -> str:
+        try:
+            from app.services.universe_context import (
+                build_universe_context,
+                universe_style_appendix,
+            )
+
+            uni = await build_universe_context(
+                ctx.session, ctx.project, include_siblings=False
+            )
+            return universe_style_appendix(uni)
+        except Exception:
+            return ""
+
     async def _build_character_prompt(
         self,
         character: Character,
@@ -56,6 +70,7 @@ class RenderAgent(BaseAgent):
         style: str,
         session,
         user_feedback: str | None = None,
+        universe_style: str | None = None,
     ) -> str:
         desc = character.description or character.name
         # Inject visual_notes into the prompt if available
@@ -64,6 +79,8 @@ class RenderAgent(BaseAgent):
         style_desc, negative = await self._style_descriptor_async(session, style)
         face_anchor = "detailed face, clear facial features, sharp eyes"
         prompt = f"{desc}, {CHARACTER_IDENTITY_LOCK}, {face_anchor}, {style_desc}"
+        if universe_style:
+            prompt += f", {universe_style}"
         if user_feedback and user_feedback.strip():
             fb = user_feedback.strip()
             if fb.startswith("[focus:"):
@@ -84,6 +101,7 @@ class RenderAgent(BaseAgent):
         style: str,
         session,
         user_feedback: str | None = None,
+        universe_style: str | None = None,
     ) -> str:
         desc = shot.image_prompt or shot.description
         parts = [desc.strip()]
@@ -99,6 +117,8 @@ class RenderAgent(BaseAgent):
             parts.append(SHOT_CONTINUITY_LOCK)
         style_desc, negative = await self._style_descriptor_async(session, style)
         parts.append(style_desc)
+        if universe_style:
+            parts.append(universe_style)
         if user_feedback and user_feedback.strip():
             fb = user_feedback.strip()
             if fb.startswith("[focus:"):
@@ -141,6 +161,7 @@ class RenderAgent(BaseAgent):
 
         updated_count = 0
         style = ctx.project.style or ""
+        universe_style = await self._universe_style_lock(ctx)
         for i, char in enumerate(characters):
             try:
                 await self.send_progress_batch(
@@ -161,6 +182,7 @@ class RenderAgent(BaseAgent):
                     style=style,
                     session=ctx.session,
                     user_feedback=entity_fb,
+                    universe_style=universe_style or None,
                 )
                 version = await self.version_service.auto_snapshot_character(
                     ctx.session,
@@ -274,6 +296,7 @@ class RenderAgent(BaseAgent):
         updated_count = 0
         failed_count = 0
         style = ctx.project.style or ""
+        universe_style = await self._universe_style_lock(ctx)
 
         # Thinking: planning phase — starting shot rendering
         await self.send_thinking(
@@ -329,11 +352,16 @@ class RenderAgent(BaseAgent):
                         "No character images available for shot %d; using text-to-image", shot.id
                     )
 
+                targeted = (
+                    ctx.target_ids.shot_ids
+                    if ctx.target_ids and ctx.target_ids.shot_ids
+                    else ([ctx.entity_id] if ctx.entity_id is not None else None)
+                )
                 entity_fb = (
                     ctx.user_feedback
                     if ctx.user_feedback
                     and ctx.entity_type == "shot"
-                    and (ctx.entity_id is None or ctx.entity_id == shot.id)
+                    and (targeted is None or shot.id in targeted)
                     else None
                 )
                 image_prompt = await self._build_shot_prompt(
@@ -342,6 +370,7 @@ class RenderAgent(BaseAgent):
                     style=style,
                     session=ctx.session,
                     user_feedback=entity_fb,
+                    universe_style=universe_style or None,
                 )
                 version = await self.version_service.auto_snapshot_shot(
                     ctx.session,

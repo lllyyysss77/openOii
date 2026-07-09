@@ -16,11 +16,17 @@ import type { ExportResponse } from "~/types";
 interface ComicCanvasToolbarProps {
 	projectId: number;
 	onResetLayout: () => void;
+	sortMode?: boolean;
+	sortDisabled?: boolean;
+	onToggleSortMode?: () => void;
 }
 
 export const ComicCanvasToolbar = track(function ComicCanvasToolbar({
 	projectId,
 	onResetLayout,
+	sortMode = false,
+	sortDisabled = false,
+	onToggleSortMode,
 }: ComicCanvasToolbarProps) {
 	const editor = useEditor();
 	const currentTool = editor.getCurrentToolId();
@@ -156,6 +162,18 @@ export const ComicCanvasToolbar = track(function ComicCanvasToolbar({
 			<ToolButton label="整理画布" showLabel labelText="整理" onClick={onResetLayout}>
 				<Squares2X2Icon className="h-5 w-5" />
 			</ToolButton>
+			{onToggleSortMode ? (
+				<ToolButton
+					active={sortMode}
+					disabled={sortDisabled}
+					label={sortMode ? "完成分镜排序" : "排序九宫格"}
+					showLabel
+					labelText={sortMode ? "完成排序" : "排序"}
+					onClick={onToggleSortMode}
+				>
+					<span className="font-mono text-[10px] font-bold">3×N</span>
+				</ToolButton>
+			) : null}
 
 			<Divider />
 

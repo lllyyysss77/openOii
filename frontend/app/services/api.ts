@@ -287,6 +287,7 @@ export const projectsApi = {
 		feedbackType?: string,
 		entityType?: string,
 		entityId?: number,
+		entityIds?: number[],
 	) =>
 		fetchApi<{ status: string; run_id?: number }>(
 			`/api/v1/projects/${id}/feedback`,
@@ -298,6 +299,7 @@ export const projectsApi = {
 					feedback_type: feedbackType,
 					entity_type: entityType,
 					entity_id: entityId,
+					entity_ids: entityIds?.length ? entityIds : undefined,
 				}),
 			},
 		),
@@ -717,5 +719,23 @@ export const universesApi = {
 		fetchApi<import("~/types").SharedCharacterRead>(
 			`/api/v1/universes/characters/${characterId}/sync-to-universe`,
 			{ method: "POST" },
+		),
+
+	createSharedCharacter: (
+		universeId: number,
+		data: {
+			name: string;
+			description?: string | null;
+			visual_notes?: string | null;
+			canonical_image_url?: string | null;
+			character_tags?: string | null;
+		},
+	) =>
+		fetchApi<import("~/types").SharedCharacterRead>(
+			`/api/v1/universes/${universeId}/shared-characters/manual`,
+			{
+				method: "POST",
+				body: JSON.stringify(data),
+			},
 		),
 };

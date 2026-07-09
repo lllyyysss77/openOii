@@ -74,6 +74,16 @@ class OutlineAgent(BaseAgent):
         reimagine_meta = getattr(ctx.project, "reimagine_meta", None)
         if isinstance(reimagine_meta, dict) and reimagine_meta:
             payload["reimagine_meta"] = reimagine_meta
+        try:
+            from app.services.universe_context import build_universe_context
+
+            universe_ctx = await build_universe_context(
+                ctx.session, ctx.project, include_siblings=True
+            )
+            if universe_ctx:
+                payload["universe_context"] = universe_ctx
+        except Exception:
+            pass
 
         system = SYSTEM_PROMPT + skill_system_appendix(get_skill(skill_id))
         resp = await self.call_llm(

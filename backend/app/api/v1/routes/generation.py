@@ -334,6 +334,7 @@ async def feedback_project(
                     feedback_type=payload.feedback_type,
                     entity_type=payload.entity_type,
                     entity_id=payload.entity_id,
+                    entity_ids=payload.entity_ids,
                 )
         except asyncio.CancelledError:
             # 任务被取消，更新数据库状态

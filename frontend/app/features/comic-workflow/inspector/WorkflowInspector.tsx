@@ -9,6 +9,7 @@ import {
 	getStaticUrl,
 	projectsApi,
 	shotsApi,
+	universesApi,
 } from "~/services/api";
 import { useEditorStore } from "~/stores/editorStore";
 import type {
@@ -27,7 +28,9 @@ type InspectorTab = "overview" | "content" | "actions";
 interface WorkflowInspectorProps {
 	projectId: number;
 	selectedNode: ComicWorkflowNode | null;
+	selectedNodeIds?: string[];
 	structureLocked: boolean;
+	universeId?: number | null;
 }
 
 const TAB_LABELS: Record<InspectorTab, string> = {
@@ -45,7 +48,9 @@ function errorMessage(error: unknown, fallback: string): string {
 export function WorkflowInspector({
 	projectId,
 	selectedNode,
+	selectedNodeIds = [],
 	structureLocked,
+	universeId = null,
 }: WorkflowInspectorProps) {
 	const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
 
@@ -53,14 +58,34 @@ export function WorkflowInspector({
 		setActiveTab("overview");
 	}, [selectedNode?.id]);
 
-	if (!selectedNode) {
+	const multiShotIds = selectedNodeIds
+		.filter((id) => id.startsWith("shot:"))
+		.map((id) => Number(id.split(":")[1]))
+		.filter((n) => Number.isFinite(n));
+
+	if (!selectedNode && multiShotIds.length === 0) {
 		return (
 			<div className="flex h-full flex-col items-center justify-center px-4 text-center text-[length:var(--text-xs)] text-base-content/45">
 				<SvgIcon name="layers" size={22} className="mb-2 opacity-40" />
 				<p className="m-0">选择画布卡片查看细节</p>
+				<p className="m-0 mt-1 text-[length:var(--text-2xs)] text-base-content/35">
+					可多选分镜格 · 批量重做本格
+				</p>
 			</div>
 		);
 	}
+
+	if (!selectedNode && multiShotIds.length > 0) {
+		return (
+			<MultiShotActions
+				projectId={projectId}
+				shotIds={multiShotIds}
+				structureLocked={structureLocked}
+			/>
+		);
+	}
+
+	if (!selectedNode) return null;
 
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-base-100" data-shell="inspector">
@@ -109,6 +134,8 @@ export function WorkflowInspector({
 						projectId={projectId}
 						node={selectedNode}
 						structureLocked={structureLocked}
+						universeId={universeId}
+						multiShotIds={multiShotIds}
 					/>
 				) : null}
 			</div>
@@ -473,18 +500,101 @@ function ShotDraftForm({ shot, disabled }: { shot: Shot; disabled: boolean }) {
 	);
 }
 
-function ActionsTab({
+function MultiShotActions({
 	projectId,
-	node,
+	shotIds,
 	structureLocked,
 }: {
 	projectId: number;
-	node: ComicWorkflowNode;
+	shotIds: number[];
 	structureLocked: boolean;
 }) {
 	const queryClient = useQueryClient();
 	const [busy, setBusy] = useState<string | null>(null);
 	const writeDisabled = structureLocked || Boolean(busy);
+
+	const batchRegen = (type: "image" | "video") =>
+		void (async () => {
+			setBusy(type);
+			try {
+				await Promise.all(shotIds.map((id) => shotsApi.regenerate(id, type)));
+				queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+				toast.success({
+					title: type === "image" ? "批量重做首帧" : "批量重做视频",
+					message: `已为 ${shotIds.length} 格启动任务`,
+				});
+			} catch (error) {
+				toast.error({
+					title: "批量重做失败",
+					message: errorMessage(error, "请重试"),
+				});
+			} finally {
+				setBusy(null);
+			}
+		})();
+
+	return (
+		<div className="flex h-full min-h-0 flex-col bg-base-100 p-2" data-shell="inspector-multi">
+			<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/40">
+				multi-shot
+			</p>
+			<h2 className="m-0 font-heading text-[length:var(--text-sm)] font-bold">
+				已选 {shotIds.length} 格
+			</h2>
+			<p className="m-0 mt-1 text-[length:var(--text-2xs)] text-base-content/55">
+				九宫格多选：可批量重做首帧或视频，不改其他格。
+			</p>
+			<div className="mt-3 space-y-2">
+				{structureLocked ? (
+					<div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-xs text-warning">
+						生成运行中，批量操作已锁定。
+					</div>
+				) : null}
+				<ActionButton
+					icon="refresh-cw"
+					label={`批量重做首帧（${shotIds.length}）`}
+					disabled={writeDisabled}
+					loading={busy === "image"}
+					onClick={() => batchRegen("image")}
+				/>
+				<ActionButton
+					icon="play"
+					label={`批量重做视频（${shotIds.length}）`}
+					disabled={writeDisabled}
+					loading={busy === "video"}
+					onClick={() => batchRegen("video")}
+				/>
+			</div>
+		</div>
+	);
+}
+
+function ActionsTab({
+	projectId,
+	node,
+	structureLocked,
+	universeId = null,
+	multiShotIds = [],
+}: {
+	projectId: number;
+	node: ComicWorkflowNode;
+	structureLocked: boolean;
+	universeId?: number | null;
+	multiShotIds?: number[];
+}) {
+	const queryClient = useQueryClient();
+	const [busy, setBusy] = useState<string | null>(null);
+	const writeDisabled = structureLocked || Boolean(busy);
+
+	if (multiShotIds.length > 1) {
+		return (
+			<MultiShotActions
+				projectId={projectId}
+				shotIds={multiShotIds}
+				structureLocked={structureLocked}
+			/>
+		);
+	}
 
 	const invalidateProjectData = () => {
 		queryClient.invalidateQueries({ queryKey: ["project", projectId] });
@@ -583,6 +693,30 @@ function ActionsTab({
 			toast.success({ title: "资产库", message: "已保存" });
 		});
 
+	const promoteToUniverse = () =>
+		runAction("promote", async () => {
+			if (!universeId || node.kind !== "character") return;
+			await universesApi.promoteCharacter(universeId, entityId);
+			queryClient.invalidateQueries({ queryKey: ["universe", universeId] });
+			toast.success({
+				title: "已提升到宇宙",
+				message: "共享角色库已更新，后续章节可沿用",
+			});
+		});
+
+	const syncToUniverse = () =>
+		runAction("sync", async () => {
+			if (node.kind !== "character") return;
+			await universesApi.syncCharacter(entityId);
+			if (universeId) {
+				queryClient.invalidateQueries({ queryKey: ["universe", universeId] });
+			}
+			toast.success({
+				title: "已同步回宇宙",
+				message: "共享角色圣经版本 +1",
+			});
+		});
+
 	const deleteNode = () =>
 		runAction("delete", async () => {
 			const confirmed = window.confirm(deleteMessage(node));
@@ -611,7 +745,7 @@ function ActionsTab({
 				<div className="rounded-lg border border-accent/30 bg-accent/10 p-3 text-xs leading-relaxed text-base-content/70">
 					<strong className="text-accent">{shotCellLabel}</strong>
 					{" · "}
-					重做只刷新这一格，不影响其他分镜与角色资产。也可在对话里绑定本格发反馈。
+					重做只刷新这一格，不影响其他分镜与角色资产。也可在对话里绑定本格发反馈；可多选多格批量重做。
 				</div>
 			) : null}
 			<ActionButton
@@ -639,13 +773,33 @@ function ActionsTab({
 					/>
 				</>
 			) : (
-				<ActionButton
-					icon="refresh-cw"
-					label="重新生成当前角色"
-					disabled={writeDisabled}
-					loading={busy === "regenerate"}
-					onClick={() => regenerate("image")}
-				/>
+				<>
+					<ActionButton
+						icon="refresh-cw"
+						label="重新生成当前角色"
+						disabled={writeDisabled}
+						loading={busy === "regenerate"}
+						onClick={() => regenerate("image")}
+					/>
+					{universeId ? (
+						<>
+							<ActionButton
+								icon="star"
+								label="提升到宇宙共享角色"
+								disabled={writeDisabled}
+								loading={busy === "promote"}
+								onClick={promoteToUniverse}
+							/>
+							<ActionButton
+								icon="refresh-cw"
+								label="同步变更回宇宙"
+								disabled={writeDisabled}
+								loading={busy === "sync"}
+								onClick={syncToUniverse}
+							/>
+						</>
+					) : null}
+				</>
 			)}
 			<ActionButton
 				icon="archive"

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	Tldraw,
 	track,
@@ -12,6 +12,7 @@ import { ImagePreviewModal, VideoPreviewModal } from "~/components/canvas/Previe
 import { canvasEvents } from "~/components/canvas/canvasEvents";
 import { projectsApi } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
+import { toast } from "~/utils/toast";
 import type { ComicWorkflowGraph } from "../graph/types";
 import { buildComicWorkflow } from "../graph/buildComicWorkflow";
 import { layoutComicWorkflow } from "../graph/layoutComicWorkflow";
@@ -28,6 +29,8 @@ import {
 interface ComicWorkflowCanvasProps {
 	projectId: number;
 	onSelectedNodeIdChange?: (nodeId: string | null) => void;
+	/** Multi-select 九宫格 / cast binding (ordered, primary first). */
+	onSelectedNodeIdsChange?: (nodeIds: string[]) => void;
 }
 
 const components: TLComponents = {
@@ -52,6 +55,7 @@ const components: TLComponents = {
 export function ComicWorkflowCanvas({
 	projectId,
 	onSelectedNodeIdChange,
+	onSelectedNodeIdsChange,
 }: ComicWorkflowCanvasProps) {
 	const editorRef = useRef<Editor | null>(null);
 	const [isInitialized, setIsInitialized] = useState(false);
@@ -137,7 +141,16 @@ export function ComicWorkflowCanvas({
 	);
 	const lastSignatureRef = useRef<string>("");
 	const structureLocked = isGenerating || awaitingConfirm || Boolean(currentRunId);
-	const interactionMode: WorkflowInteractionMode = structureLocked ? "locked" : "layout";
+	const [sortMode, setSortMode] = useState(false);
+	const interactionMode: WorkflowInteractionMode = structureLocked
+		? "locked"
+		: sortMode
+			? "sort"
+			: "layout";
+
+	useEffect(() => {
+		if (structureLocked && sortMode) setSortMode(false);
+	}, [structureLocked, sortMode]);
 
 	useEffect(() => {
 		const unsubscribers = [
@@ -145,12 +158,13 @@ export function ComicWorkflowCanvas({
 			canvasEvents.on("preview-video", setPreviewVideo),
 			canvasEvents.on("select-workflow-node", ({ nodeId }) => {
 				onSelectedNodeIdChange?.(nodeId);
+				onSelectedNodeIdsChange?.(nodeId ? [nodeId] : []);
 			}),
 		];
 		return () => {
 			unsubscribers.forEach((unsubscribe) => unsubscribe());
 		};
-	}, [onSelectedNodeIdChange]);
+	}, [onSelectedNodeIdChange, onSelectedNodeIdsChange]);
 
 	const syncProjection = useCallback(
 		(forceLayout = false) => {
@@ -227,15 +241,29 @@ export function ComicWorkflowCanvas({
 					<SelectionBridge
 						graph={graph}
 						onSelectedNodeIdChange={onSelectedNodeIdChange}
+						onSelectedNodeIdsChange={onSelectedNodeIdsChange}
 					/>
 					<ProjectionSyncBridge
 						graph={graph}
 						layout={layout}
 						interactionMode={interactionMode}
 					/>
+					{sortMode ? (
+						<ShotSortBridge
+							projectId={projectId}
+							graph={graph}
+							onSorted={() => {
+								setSortMode(false);
+								syncProjection(true);
+							}}
+						/>
+					) : null}
 					<ComicCanvasToolbar
 						projectId={projectId}
 						onResetLayout={handleResetLayout}
+						sortMode={sortMode}
+						sortDisabled={structureLocked}
+						onToggleSortMode={() => setSortMode((v) => !v)}
 					/>
 				</Tldraw>
 			</div>
@@ -263,23 +291,131 @@ export function ComicWorkflowCanvas({
 const SelectionBridge = track(function SelectionBridge({
 	graph,
 	onSelectedNodeIdChange,
+	onSelectedNodeIdsChange,
 }: {
 	graph: ComicWorkflowGraph;
 	onSelectedNodeIdChange?: (nodeId: string | null) => void;
+	onSelectedNodeIdsChange?: (nodeIds: string[]) => void;
 }) {
 	const editor = useEditor();
 	const selectedIds = editor.getSelectedShapeIds();
-	const selectedNodeId = useMemo(() => {
-		if (selectedIds.length !== 1) return null;
-		const shape = editor.getShape(selectedIds[0]);
-		const nodeId = nodeIdFromShape(shape);
-		if (!nodeId) return null;
-		return graph.nodes.some((node) => node.id === nodeId) ? nodeId : null;
+	const selectedNodeIds = useMemo(() => {
+		const ids: string[] = [];
+		for (const shapeId of selectedIds) {
+			const shape = editor.getShape(shapeId);
+			const nodeId = nodeIdFromShape(shape);
+			if (!nodeId) continue;
+			if (graph.nodes.some((node) => node.id === nodeId)) {
+				ids.push(nodeId);
+			}
+		}
+		return ids;
 	}, [editor, graph.nodes, selectedIds]);
 
 	useEffect(() => {
-		onSelectedNodeIdChange?.(selectedNodeId);
-	}, [onSelectedNodeIdChange, selectedNodeId]);
+		onSelectedNodeIdsChange?.(selectedNodeIds);
+		onSelectedNodeIdChange?.(selectedNodeIds[0] ?? null);
+	}, [onSelectedNodeIdChange, onSelectedNodeIdsChange, selectedNodeIds]);
+
+	return null;
+});
+
+/** After free-drag in sort mode, persist shot order by visual reading order. */
+const ShotSortBridge = track(function ShotSortBridge({
+	projectId,
+	graph,
+	onSorted,
+}: {
+	projectId: number;
+	graph: ComicWorkflowGraph;
+	onSorted: () => void;
+}) {
+	const editor = useEditor();
+	const queryClient = useQueryClient();
+	const settling = useRef(false);
+	const timerRef = useRef<number | null>(null);
+
+	useEffect(() => {
+		const scheduleReorder = () => {
+			if (settling.current) return;
+			if (timerRef.current) window.clearTimeout(timerRef.current);
+			timerRef.current = window.setTimeout(() => {
+				if (settling.current) return;
+				// Avoid mid-drag commits when still translating
+				const path = editor.getPath();
+				if (path.includes("translating") || path.includes("pointing")) return;
+
+				const shotShapes = editor
+					.getCurrentPageShapes()
+					.filter((shape) => {
+						const nodeId = nodeIdFromShape(shape);
+						return Boolean(nodeId?.startsWith("shot:"));
+					})
+					.map((shape) => {
+						const nodeId = nodeIdFromShape(shape)!;
+						const entityId = Number(nodeId.split(":")[1]);
+						return { entityId, x: shape.x, y: shape.y };
+					})
+					.filter((item) => Number.isFinite(item.entityId));
+
+				if (shotShapes.length < 2) return;
+
+				const ordered = [...shotShapes].sort((a, b) => {
+					const rowA = Math.round(a.y / 48);
+					const rowB = Math.round(b.y / 48);
+					if (rowA !== rowB) return rowA - rowB;
+					return a.x - b.x;
+				});
+
+				const items = ordered.map((item, index) => ({
+					shot_id: item.entityId,
+					order: index + 1,
+				}));
+
+				const currentOrders = graph.nodes
+					.filter((n) => n.kind === "shot" && n.entityId != null)
+					.map((n) => ({
+						shot_id: n.entityId as number,
+						order: n.kind === "shot" ? n.shot.order : 0,
+					}))
+					.sort((a, b) => a.order - b.order);
+				const same =
+					currentOrders.length === items.length &&
+					currentOrders.every((c, i) => c.shot_id === items[i].shot_id);
+				if (same) return;
+
+				settling.current = true;
+				projectsApi
+					.reorderShots(projectId, items)
+					.then(() => {
+						queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+						toast.success({
+							title: "九宫格已重排",
+							message: `已按阅读顺序更新 ${items.length} 格`,
+						});
+						onSorted();
+					})
+					.catch((error: Error) => {
+						toast.error({
+							title: "重排失败",
+							message: error.message || "请重试",
+						});
+					})
+					.finally(() => {
+						settling.current = false;
+					});
+			}, 320);
+		};
+
+		const unsub = editor.store.listen(scheduleReorder, {
+			source: "user",
+			scope: "document",
+		});
+		return () => {
+			unsub();
+			if (timerRef.current) window.clearTimeout(timerRef.current);
+		};
+	}, [editor, graph.nodes, onSorted, projectId, queryClient]);
 
 	return null;
 });
