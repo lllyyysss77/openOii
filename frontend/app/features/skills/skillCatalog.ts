@@ -1,6 +1,6 @@
 /**
- * Frontend skill presets — OiiOii-style entry points.
- * Backend orchestration hooks land in Phase 3; for now skills prefill create form.
+ * Skill presets — frontend types + offline fallback.
+ * Prefer backend `/api/v1/skills` as SSOT; this catalog is the bootstrap/fallback.
  */
 
 export type SkillBadge = "new" | "core" | "soon";
@@ -18,11 +18,66 @@ export interface SkillPreset {
 		creationMode?: "review" | "quick";
 		placeholder?: string;
 		storyHint?: string;
+		targetShotCount?: number;
 	};
-	/** false = UI only, generation path still uses default story pipeline */
+	directives?: string;
 	available: boolean;
 }
 
+const ACCENT_CYCLE: SkillPreset["accent"][] = [
+	"primary",
+	"secondary",
+	"accent",
+	"info",
+];
+
+/** Map API skill row → UI preset */
+export function skillFromApi(
+	row: {
+		id: string;
+		title: string;
+		description: string;
+		badge?: string | null;
+		prefer_auto_mode?: boolean;
+		default_style?: string | null;
+		default_creation_mode?: string | null;
+		default_target_shot_count?: number | null;
+		story_prefix?: string;
+		directives?: string;
+		placeholder?: string;
+		available?: boolean;
+	},
+	index = 0,
+): SkillPreset {
+	const badge =
+		row.badge === "core" || row.badge === "new" || row.badge === "soon"
+			? row.badge
+			: undefined;
+	const creationMode =
+		row.default_creation_mode === "quick" || row.prefer_auto_mode
+			? "quick"
+			: row.default_creation_mode === "review"
+				? "review"
+				: undefined;
+	return {
+		id: row.id,
+		title: row.title,
+		description: row.description,
+		accent: ACCENT_CYCLE[index % ACCENT_CYCLE.length],
+		badge,
+		prefill: {
+			style: row.default_style ?? undefined,
+			creationMode,
+			placeholder: row.placeholder || row.description,
+			storyHint: row.story_prefix || "",
+			targetShotCount: row.default_target_shot_count ?? undefined,
+		},
+		directives: row.directives,
+		available: row.available !== false,
+	};
+}
+
+/** Offline fallback when API is unavailable */
 export const SKILL_CATALOG: SkillPreset[] = [
 	{
 		id: "story-anime",
@@ -49,6 +104,7 @@ export const SKILL_CATALOG: SkillPreset[] = [
 			creationMode: "review",
 			placeholder: "描述角色外貌、性格、标志性道具与出场情绪。",
 			storyHint: "【角色设计优先】\n",
+			targetShotCount: 4,
 		},
 		available: true,
 	},
@@ -71,24 +127,27 @@ export const SKILL_CATALOG: SkillPreset[] = [
 		title: "快速成片",
 		description: "少打断、托管式跑通整条流水线，适合草稿验证。",
 		accent: "info",
+		badge: "core",
 		prefill: {
 			style: "anime",
 			creationMode: "quick",
 			placeholder: "用一句话描述短片点子，系统将自动推进各阶段。",
+			targetShotCount: 5,
 		},
 		available: true,
 	},
 	{
 		id: "video-reimagine",
 		title: "拉片复刻",
-		description: "上传参考片 → 结构化拆解 → 换元素再生成（即将接入）。",
+		description: "结构化拆解参考片要点 → 换元素再生成。",
 		accent: "secondary",
-		badge: "soon",
+		badge: "core",
 		prefill: {
 			style: "cinematic",
 			creationMode: "review",
-			placeholder: "先用文字描述想复刻的镜头结构与替换元素。",
-			storyHint: "【拉片复刻草稿】\n参考片要点：\n要替换的角色/场景：\n",
+			placeholder: "用文字描述想复刻的镜头结构与替换元素。",
+			storyHint: "【拉片复刻】\n",
+			targetShotCount: 6,
 		},
 		available: true,
 	},
@@ -97,12 +156,13 @@ export const SKILL_CATALOG: SkillPreset[] = [
 		title: "商品展示广告",
 		description: "卖点 + 产品参考 → 广告分镜短片工作流。",
 		accent: "accent",
-		badge: "soon",
+		badge: "core",
 		prefill: {
 			style: "cinematic",
 			creationMode: "review",
 			placeholder: "产品是什么？核心卖点？目标受众与口播语气？",
-			storyHint: "【商品广告】\n产品：\n卖点：\n",
+			storyHint: "【商品广告】\n",
+			targetShotCount: 5,
 		},
 		available: true,
 	},
@@ -116,6 +176,7 @@ export const SKILL_CATALOG: SkillPreset[] = [
 			creationMode: "review",
 			placeholder: "描述时代、地点、天气、光线与关键道具。",
 			storyHint: "【场景优先】\n",
+			targetShotCount: 6,
 		},
 		available: true,
 	},
@@ -128,11 +189,15 @@ export const SKILL_CATALOG: SkillPreset[] = [
 			style: "pixar",
 			creationMode: "quick",
 			placeholder: "宠物/搞笑桥段一句话，最好带反转。",
+			targetShotCount: 5,
 		},
 		available: true,
 	},
 ];
 
-export function getSkillById(id: string): SkillPreset | undefined {
-	return SKILL_CATALOG.find((skill) => skill.id === id);
+export function getSkillById(
+	id: string,
+	catalog: SkillPreset[] = SKILL_CATALOG,
+): SkillPreset | undefined {
+	return catalog.find((skill) => skill.id === id);
 }

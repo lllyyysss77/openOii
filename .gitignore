@@ -32,3 +32,4 @@ dump.rdb
 frontend-*.png
 frontend-*.json.gz
 lighthouse-*/
+tmp/

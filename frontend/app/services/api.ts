@@ -459,22 +459,39 @@ export const versionsApi = {
 		),
 };
 
+export type SkillApiRow = {
+	id: string;
+	title: string;
+	description: string;
+	badge: string | null;
+	start_stage: string;
+	start_agent: string;
+	prefer_auto_mode: boolean;
+	default_style: string | null;
+	default_creation_mode: string | null;
+	default_target_shot_count: number | null;
+	story_prefix: string;
+	directives: string;
+	pipeline_hints: Record<string, unknown>;
+	placeholder: string;
+	available: boolean;
+};
+
 export const skillsApi = {
-	list: () =>
-		fetchApi<
-			Array<{
-				id: string;
-				title: string;
-				description: string;
-				badge: string | null;
-				start_stage: string;
-				start_agent: string;
-				prefer_auto_mode: boolean;
-				default_style: string | null;
-				story_prefix: string;
-				available: boolean;
-			}>
-		>("/api/v1/skills"),
+	list: () => fetchApi<SkillApiRow[]>("/api/v1/skills"),
+};
+
+export type ReimagineAnalysis = {
+	dimensions: Array<{ key: string; label: string; value: string }>;
+	slots: Array<{
+		key: string;
+		label: string;
+		current_value: string;
+		replaceable: boolean;
+	}>;
+	reconstructed_prompt: string;
+	source_brief: string;
+	skill_id: string;
 };
 
 export const reimagineApi = {
@@ -483,18 +500,7 @@ export const reimagineApi = {
 		replacements?: Record<string, string>;
 		style_hint?: string | null;
 	}) =>
-		fetchApi<{
-			dimensions: Array<{ key: string; label: string; value: string }>;
-			slots: Array<{
-				key: string;
-				label: string;
-				current_value: string;
-				replaceable: boolean;
-			}>;
-			reconstructed_prompt: string;
-			source_brief: string;
-			skill_id: string;
-		}>("/api/v1/reimagine/analyze", {
+		fetchApi<ReimagineAnalysis>("/api/v1/reimagine/analyze", {
 			method: "POST",
 			body: JSON.stringify(data),
 		}),

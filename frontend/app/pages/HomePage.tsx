@@ -97,12 +97,20 @@ export function HomePage() {
 	const [reimagineOpen, setReimagineOpen] = useState(false);
 	const [reimagineBrief, setReimagineBrief] = useState("");
 	const [reimagineBusy, setReimagineBusy] = useState(false);
+	const [reimagineError, setReimagineError] = useState<string | null>(null);
 	const [reimagineSlots, setReimagineSlots] = useState<
 		Array<{ key: string; label: string; current_value: string }>
+	>([]);
+	const [reimagineDimensions, setReimagineDimensions] = useState<
+		Array<{ key: string; label: string; value: string }>
 	>([]);
 	const [reimagineReplacements, setReimagineReplacements] = useState<
 		Record<string, string>
 	>({});
+	const [reimagineMeta, setReimagineMeta] = useState<Record<
+		string,
+		unknown
+	> | null>(null);
 	const storyInputRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	useEffect(() => {
@@ -189,6 +197,8 @@ export function HomePage() {
 			chapter_number: chapterNumber,
 			chapter_title: chapterTitle,
 			skill_id: activeSkillId,
+			reimagine_meta:
+				activeSkillId === "video-reimagine" ? reimagineMeta : undefined,
 			text_provider_override: null,
 			image_provider_override: null,
 			video_provider_override: null,
@@ -275,22 +285,28 @@ export function HomePage() {
 		if (skill.prefill.style) setStyle(skill.prefill.style);
 		if (skill.prefill.creationMode) setCreationMode(skill.prefill.creationMode);
 		if (skill.prefill.placeholder) setStoryPlaceholder(skill.prefill.placeholder);
+		if (skill.prefill.targetShotCount != null && shotCount == null) {
+			setShotCount(skill.prefill.targetShotCount);
+		}
 		if (skill.prefill.storyHint !== undefined && !story.trim()) {
 			setStory(skill.prefill.storyHint);
 		}
 		if (skill.id === "video-reimagine") {
 			setReimagineOpen(true);
+		} else {
+			setReimagineOpen(false);
 		}
 		requestAnimationFrame(() => {
 			storyInputRef.current?.focus();
 			storyInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
 		});
-	}, [story]);
+	}, [story, shotCount]);
 
 	const handleReimagineAnalyze = async () => {
 		const brief = reimagineBrief.trim();
 		if (!brief || reimagineBusy) return;
 		setReimagineBusy(true);
+		setReimagineError(null);
 		try {
 			const result = await reimagineApi.analyze({
 				source_brief: brief,
@@ -298,12 +314,20 @@ export function HomePage() {
 				style_hint: style,
 			});
 			setReimagineSlots(result.slots);
+			setReimagineDimensions(result.dimensions);
 			setStory(result.reconstructed_prompt);
 			setActiveSkillId("video-reimagine");
 			setCreationMode("review");
+			setReimagineMeta({
+				dimensions: result.dimensions,
+				slots: result.slots,
+				source_brief: result.source_brief,
+				replacements: reimagineReplacements,
+				reconstructed_prompt: result.reconstructed_prompt,
+			});
 		} catch (e) {
 			if (import.meta.env.DEV) console.error("[reimagine]", e);
-			alert("拉片分析失败，请稍后重试");
+			setReimagineError("拉片分析失败，请检查后端或稍后重试");
 		} finally {
 			setReimagineBusy(false);
 		}
@@ -313,18 +337,29 @@ export function HomePage() {
 		const brief = reimagineBrief.trim();
 		if (!brief || reimagineBusy) return;
 		setReimagineBusy(true);
+		setReimagineError(null);
 		try {
 			const result = await reimagineApi.analyze({
 				source_brief: brief,
 				replacements: reimagineReplacements,
 				style_hint: style,
 			});
+			setReimagineSlots(result.slots);
+			setReimagineDimensions(result.dimensions);
 			setStory(result.reconstructed_prompt);
+			setActiveSkillId("video-reimagine");
+			setReimagineMeta({
+				dimensions: result.dimensions,
+				slots: result.slots,
+				source_brief: result.source_brief,
+				replacements: reimagineReplacements,
+				reconstructed_prompt: result.reconstructed_prompt,
+			});
 			setReimagineOpen(false);
 			storyInputRef.current?.focus();
 		} catch (e) {
 			if (import.meta.env.DEV) console.error("[reimagine]", e);
-			alert("应用替换失败，请稍后重试");
+			setReimagineError("应用替换失败，请稍后重试");
 		} finally {
 			setReimagineBusy(false);
 		}
@@ -424,7 +459,7 @@ export function HomePage() {
 										Reimagine
 									</p>
 									<h2 className="m-0 font-heading text-[length:var(--text-md)] font-bold">
-										拉片复刻 v0
+										拉片复刻
 									</h2>
 								</div>
 								<button
@@ -436,9 +471,9 @@ export function HomePage() {
 								</button>
 							</div>
 							<p className="m-0 border-b border-base-content/8 px-[var(--space-3)] py-1.5 text-[length:var(--text-2xs)] text-base-content/55">
-								粘贴参考片描述 / 口播 / 分镜笔记 → 拆维度与槽位 → 写入创作台
+								粘贴参考片描述 / 口播 / 分镜笔记 → 18 维拆解 + 槽位替换 → 写入创作台并带 skill 策略生成
 							</p>
-							<div className="grid gap-[var(--space-3)] p-[var(--space-3)] lg:grid-cols-[minmax(0,1fr)_14rem]">
+							<div className="grid gap-[var(--space-3)] p-[var(--space-3)] lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
 								<div>
 									<label
 										htmlFor="reimagine-brief"
@@ -456,6 +491,11 @@ export function HomePage() {
 										disabled={reimagineBusy}
 										autoComplete="off"
 									/>
+									{reimagineError ? (
+										<p className="m-0 mt-1.5 text-[length:var(--text-2xs)] text-error">
+											{reimagineError}
+										</p>
+									) : null}
 									<div className="mt-2 flex flex-wrap gap-2">
 										<Button
 											variant="secondary"
@@ -476,21 +516,52 @@ export function HomePage() {
 											写入创作台
 										</Button>
 									</div>
+									{reimagineDimensions.length > 0 ? (
+										<div className="mt-3 max-h-48 overflow-y-auto rounded-[var(--radius-md)] border border-base-content/10 bg-base-200/40 p-2">
+											<p className="m-0 mb-1.5 font-heading text-[length:var(--text-xs)] font-bold">
+												18 维导演拆解
+											</p>
+											<ul className="m-0 grid list-none gap-1 p-0 sm:grid-cols-2">
+												{reimagineDimensions.map((dim) => (
+													<li
+														key={dim.key}
+														className="rounded border border-base-content/8 bg-base-100 px-1.5 py-1"
+													>
+														<span className="block font-mono text-[length:var(--text-2xs)] text-base-content/50">
+															{dim.label}
+														</span>
+														<span className="block text-[length:var(--text-2xs)] leading-snug">
+															{dim.value || "—"}
+														</span>
+													</li>
+												))}
+											</ul>
+										</div>
+									) : null}
 								</div>
 								<div className="space-y-1.5">
-									<p className={sectionLabel}>元素替换</p>
+									<p className={sectionLabel}>元素替换（可编辑槽位）</p>
 									{(reimagineSlots.length > 0
 										? reimagineSlots
 										: [
 												{ key: "characters", label: "角色", current_value: "" },
 												{ key: "scenes", label: "场景", current_value: "" },
+												{ key: "props", label: "道具", current_value: "" },
 												{ key: "visual_style", label: "画面风格", current_value: "" },
+												{ key: "effects", label: "特效", current_value: "" },
+												{ key: "music", label: "音乐", current_value: "" },
 											]
 									).map((slot) => (
 										<label key={slot.key} className="form-control">
 											<span className="label px-0 py-0">
 												<span className="label-text font-mono text-[length:var(--text-2xs)] text-base-content/60">
 													{slot.label}
+													{slot.current_value ? (
+														<span className="ml-1 text-base-content/35">
+															现：{slot.current_value.slice(0, 24)}
+															{slot.current_value.length > 24 ? "…" : ""}
+														</span>
+													) : null}
 												</span>
 											</span>
 											<input

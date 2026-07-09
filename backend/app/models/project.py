@@ -34,6 +34,8 @@ class Project(SQLModel, table=True):
     chapter_title: Optional[str] = None
     reference_images: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=True))
     exports: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=True))
+    skill_id: Optional[str] = Field(default=None, index=True)
+    reimagine_meta: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

@@ -454,7 +454,7 @@ export function ProjectPage() {
 		useEditorStore.getState().setCurrentStage("plan");
 		generateMutation.mutate({
 			requestToken,
-			skillId: searchParams.get("skill"),
+			skillId: searchParams.get("skill") || project?.skill_id || null,
 		});
 	};
 
@@ -553,7 +553,8 @@ export function ProjectPage() {
 
 	useEffect(() => {
 		const autoStart = searchParams.get("autoStart");
-		const skillId = searchParams.get("skill");
+		const skillId =
+			searchParams.get("skill") || project?.skill_id || null;
 		if (
 			autoStart === "true" &&
 			project &&
@@ -562,15 +563,19 @@ export function ProjectPage() {
 		) {
 			const editorStore = useEditorStore.getState();
 			autoStartTriggered.current = true;
-			// Keep skill in URL only for this kickoff; clear autoStart noise
-			setSearchParams(skillId ? { skill: skillId } : {}, { replace: true });
+			// Clear autoStart noise; skill is durable on project
+			setSearchParams({}, { replace: true });
 			const requestToken = generateRequestTokenRef.current + 1;
 			generateRequestTokenRef.current = requestToken;
 			setLastRunStatus(null);
 			editorStore.clearMessages();
 			editorStore.setCurrentStage("plan");
 			// quick skill prefers yolo
-			if (skillId === "quick-short" || skillId === "comedy-pet") {
+			if (
+				skillId === "quick-short" ||
+				skillId === "comedy-pet" ||
+				project.creation_mode === "quick"
+			) {
 				editorStore.setRunMode("yolo");
 			}
 			generateMutation.mutate({ requestToken, skillId });

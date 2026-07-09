@@ -166,9 +166,11 @@ async def analyze_reimagine(
     if llm is not None:
         try:
             values = await _llm_breakdown(llm, request.source_brief, values)
-        except Exception:
-            # Soft-fail: keep heuristic values
-            pass
+        except Exception as exc:
+            # Soft-fail: keep heuristic values, but log
+            import logging
+
+            logging.getLogger(__name__).warning("reimagine analyze LLM error: %s", exc)
 
     values = _apply_replacements(values, request.replacements)
     dimensions = [
@@ -201,30 +203,52 @@ async def analyze_reimagine(
 
 
 async def _llm_breakdown(llm: Any, brief: str, fallback: dict[str, str]) -> dict[str, str]:
+    import logging
+
+    logger = logging.getLogger(__name__)
     keys = [k for k, _ in REIMAGINE_DIMENSIONS]
-    schema_hint = {k: "string" for k in keys}
     system = (
-        "你是动画导演助理。根据用户提供的参考片描述/脚本/口播，"
-        "输出严格 JSON 对象，键必须完整覆盖给定 schema，值为简洁中文。"
-        f"schema keys: {json.dumps(keys, ensure_ascii=False)}"
+        "你是动画导演助理。根据用户提供的参考片描述/脚本/口播/分镜笔记，"
+        "输出严格 JSON 对象，键必须完整覆盖下列 schema，值为简洁中文（每项 1 句内）。"
+        "不要编造与原文完全无关的剧情；缺失信息用合理导演推断并标注「推断」。"
+        f" schema keys: {json.dumps(keys, ensure_ascii=False)}"
     )
-    prompt = f"{system}\n\n参考内容：\n{brief}\n\n只输出 JSON。"
+    user_prompt = (
+        f"参考内容：\n{brief}\n\n"
+        "只输出一个 JSON 对象，不要 Markdown 代码块，不要额外解释。"
+    )
 
     raw: str | None = None
-    if hasattr(llm, "complete"):
-        resp = await llm.complete(prompt)
-        raw = getattr(resp, "content", None) or str(resp)
-    elif hasattr(llm, "generate"):
-        resp = await llm.generate(prompt)
-        raw = getattr(resp, "content", None) or str(resp)
-    elif callable(llm):
-        raw = str(await llm(prompt))
+    try:
+        if hasattr(llm, "generate"):
+            # TextService / LLMService: keyword-only API
+            resp = await llm.generate(
+                prompt=user_prompt,
+                system=system,
+                max_tokens=2048,
+                temperature=0.3,
+            )
+            raw = getattr(resp, "text", None) or getattr(resp, "content", None) or str(resp)
+        elif callable(llm):
+            raw = str(await llm(user_prompt))
+    except TypeError:
+        # Legacy positional adapters
+        try:
+            resp = await llm.generate(user_prompt)  # type: ignore[misc]
+            raw = getattr(resp, "content", None) or str(resp)
+        except Exception as exc:
+            logger.warning("reimagine LLM positional fallback failed: %s", exc)
+            return fallback
+    except Exception as exc:
+        logger.warning("reimagine LLM breakdown failed: %s", exc)
+        return fallback
 
     if not raw:
         return fallback
 
     parsed = _extract_json_object(raw)
     if not parsed:
+        logger.warning("reimagine LLM returned non-JSON; using heuristic")
         return fallback
 
     merged = dict(fallback)
@@ -232,6 +256,10 @@ async def _llm_breakdown(llm: Any, brief: str, fallback: dict[str, str]) -> dict
         val = parsed.get(key)
         if isinstance(val, str) and val.strip():
             merged[key] = val.strip()
+        elif isinstance(val, list):
+            joined = "、".join(str(x).strip() for x in val if str(x).strip())
+            if joined:
+                merged[key] = joined
     return merged
 
 

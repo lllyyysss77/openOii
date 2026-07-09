@@ -1,6 +1,9 @@
 import { clsx } from "clsx";
+import { useQuery } from "@tanstack/react-query";
+import { skillsApi } from "~/services/api";
 import {
 	SKILL_CATALOG,
+	skillFromApi,
 	type SkillPreset,
 	type SkillBadge,
 } from "~/features/skills/skillCatalog";
@@ -8,6 +11,8 @@ import {
 interface SkillWallProps {
 	activeSkillId: string | null;
 	onSelect: (skill: SkillPreset) => void;
+	/** Optional externally-resolved catalog (Home may pass shared list) */
+	skills?: SkillPreset[];
 }
 
 const ACCENT_BAR: Record<SkillPreset["accent"], string> = {
@@ -30,7 +35,20 @@ function badgeLabel(badge: SkillBadge): string {
 	return "预览";
 }
 
-export function SkillWall({ activeSkillId, onSelect }: SkillWallProps) {
+export function SkillWall({ activeSkillId, onSelect, skills }: SkillWallProps) {
+	const { data: apiSkills } = useQuery({
+		queryKey: ["skills"],
+		queryFn: () => skillsApi.list(),
+		staleTime: 60_000,
+		enabled: !skills,
+	});
+
+	const catalog: SkillPreset[] =
+		skills ??
+		(apiSkills?.length
+			? apiSkills.map((row, i) => skillFromApi(row, i))
+			: SKILL_CATALOG);
+
 	return (
 		<section
 			aria-labelledby="skill-wall-heading"
@@ -45,12 +63,12 @@ export function SkillWall({ activeSkillId, onSelect }: SkillWallProps) {
 					Skill · 点选开工
 				</h2>
 				<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/40">
-					{SKILL_CATALOG.length} 项
+					{catalog.length} 项
 				</span>
 			</div>
 
 			<ul className="m-0 grid list-none grid-cols-2 gap-[var(--space-2)] p-0 sm:grid-cols-3 lg:grid-cols-4">
-				{SKILL_CATALOG.map((skill) => {
+				{catalog.map((skill) => {
 					const active = activeSkillId === skill.id;
 					return (
 						<li key={skill.id}>

@@ -60,6 +60,7 @@ class AgentContext:
     feedback_type: str | None = None  # "plan" | "character" | "shot" | "compose"
     entity_type: str | None = None  # "character" | "shot"
     entity_id: int | None = None  # per-entity feedback target
+    skill_id: str | None = None  # durable skill policy for LLM injection
     rerun_mode: str = "full"  # "full" or "incremental"
     target_ids: TargetIds | None = None  # 精细化控制的目标 ID
     completion_info: CompletionInfo | None = None

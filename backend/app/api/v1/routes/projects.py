@@ -71,6 +71,8 @@ async def _project_read_model(project: Project, settings: Settings) -> ProjectRe
         universe_id=project.universe_id,
         chapter_number=project.chapter_number,
         chapter_title=project.chapter_title,
+        skill_id=getattr(project, "skill_id", None),
+        reimagine_meta=getattr(project, "reimagine_meta", None),
     )
 
 
@@ -80,21 +82,30 @@ async def create_project(
     session: AsyncSession = SessionDep,
     settings: Settings = SettingsDep,
 ):
+    from app.skills.context import apply_skill_defaults_to_create
+
     universe: Universe | None = None
     if payload.universe_id is not None:
         universe = await session.get(Universe, payload.universe_id)
         if universe is None:
             raise HTTPException(status_code=404, detail="Universe not found")
 
-    style = (payload.style or "").strip() or "anime"
+    skill_defaults = apply_skill_defaults_to_create(
+        skill_id=payload.skill_id,
+        story=payload.story,
+        style=payload.style,
+        target_shot_count=payload.target_shot_count,
+        creation_mode=payload.creation_mode,
+    )
+    style = skill_defaults["style"]
     project = Project(
         title=payload.title,
-        story=payload.story,
+        story=skill_defaults["story"],
         style=style,
         status=payload.status or "draft",
-        target_shot_count=payload.target_shot_count,
+        target_shot_count=skill_defaults["target_shot_count"],
         character_hints=payload.character_hints or [],
-        creation_mode=payload.creation_mode,
+        creation_mode=skill_defaults["creation_mode"],
         reference_images=payload.reference_images or [],
         exports=payload.exports or [],
         text_provider_override=payload.text_provider_override,
@@ -103,6 +114,8 @@ async def create_project(
         universe_id=payload.universe_id,
         chapter_number=payload.chapter_number,
         chapter_title=payload.chapter_title,
+        skill_id=skill_defaults["skill_id"],
+        reimagine_meta=payload.reimagine_meta,
     )
     session.add(project)
     await session.commit()

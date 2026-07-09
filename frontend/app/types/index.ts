@@ -32,6 +32,7 @@ export interface ProjectProviderOverridesPayload {
 
 export interface CreateProjectPayload extends ProjectProviderOverridesPayload {
 	skill_id?: string | null;
+	reimagine_meta?: Record<string, unknown> | null;
 	title: string;
 	story?: string;
 	style?: string;
@@ -117,6 +118,8 @@ export interface Project {
 	universe_id?: number | null;
 	chapter_number?: number | null;
 	chapter_title?: string | null;
+	skill_id?: string | null;
+	reimagine_meta?: Record<string, unknown> | null;
 }
 
 export interface Character {

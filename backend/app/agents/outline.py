@@ -51,20 +51,34 @@ class OutlineAgent(BaseAgent):
             content="正在提炼故事核心、三幕结构和视觉方向...",
         )
 
+        from app.skills.catalog import get_skill
+        from app.skills.context import skill_payload, skill_system_appendix
+
         payload: dict[str, Any] = {
             "project": {
                 "id": ctx.project.id,
                 "title": ctx.project.title,
                 "story": ctx.project.story,
                 "style": ctx.project.style,
+                "skill_id": getattr(ctx, "skill_id", None)
+                or getattr(ctx.project, "skill_id", None),
+                "target_shot_count": getattr(ctx.project, "target_shot_count", None),
             }
         }
         if ctx.user_feedback:
             payload["user_feedback"] = ctx.user_feedback
+        skill_id = payload["project"]["skill_id"]
+        skill_obj = skill_payload(skill_id)
+        if skill_obj:
+            payload["skill"] = skill_obj
+        reimagine_meta = getattr(ctx.project, "reimagine_meta", None)
+        if isinstance(reimagine_meta, dict) and reimagine_meta:
+            payload["reimagine_meta"] = reimagine_meta
 
+        system = SYSTEM_PROMPT + skill_system_appendix(get_skill(skill_id))
         resp = await self.call_llm(
             ctx,
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=system,
             user_prompt=json.dumps(payload, ensure_ascii=False),
             max_tokens=2048,
         )

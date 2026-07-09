@@ -463,6 +463,10 @@ class PlanAgent(BaseAgent):
     ) -> dict[str, Any]:
         """Call LLM for one planning sub-task and cache the result in ctx."""
         is_incremental = ctx.rerun_mode == "incremental"
+        from app.skills.catalog import get_skill
+        from app.skills.context import skill_payload, skill_system_appendix
+
+        skill_id = getattr(ctx, "skill_id", None) or getattr(ctx.project, "skill_id", None)
         payload: dict[str, Any] = {
             "project": {
                 "id": ctx.project.id,
@@ -472,6 +476,7 @@ class PlanAgent(BaseAgent):
                 "status": ctx.project.status,
                 "target_shot_count": getattr(ctx.project, "target_shot_count", None),
                 "character_hints": getattr(ctx.project, "character_hints", None) or None,
+                "skill_id": skill_id,
             },
             "mode": ctx.rerun_mode,
             "task": task,
@@ -483,6 +488,12 @@ class PlanAgent(BaseAgent):
             payload["approved_characters"] = _characters_context(characters)
         if ctx.user_feedback:
             payload["user_feedback"] = ctx.user_feedback
+        skill_obj = skill_payload(skill_id)
+        if skill_obj:
+            payload["skill"] = skill_obj
+        reimagine_meta = getattr(ctx.project, "reimagine_meta", None)
+        if isinstance(reimagine_meta, dict) and reimagine_meta:
+            payload["reimagine_meta"] = reimagine_meta
 
         # Inject universe context if project belongs to a universe
         universe_info = await self._get_universe_context(ctx)
@@ -494,8 +505,9 @@ class PlanAgent(BaseAgent):
             payload["existing_state"] = existing_state
 
         user_prompt = json.dumps(payload, ensure_ascii=False)
+        system = SYSTEM_PROMPT + skill_system_appendix(get_skill(skill_id))
         resp = await self.call_llm(
-            ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=4096
+            ctx, system_prompt=system, user_prompt=user_prompt, max_tokens=4096
         )
         data = extract_json(resp.text)
 

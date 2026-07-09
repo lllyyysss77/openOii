@@ -49,7 +49,14 @@ class RenderAgent(BaseAgent):
         resolved = await resolve_style_prompt(session, style)
         return resolved.style_prompt, resolved.negative_prompt
 
-    async def _build_character_prompt(self, character: Character, *, style: str, session) -> str:
+    async def _build_character_prompt(
+        self,
+        character: Character,
+        *,
+        style: str,
+        session,
+        user_feedback: str | None = None,
+    ) -> str:
         desc = character.description or character.name
         # Inject visual_notes into the prompt if available
         if character.visual_notes:
@@ -57,12 +64,20 @@ class RenderAgent(BaseAgent):
         style_desc, negative = await self._style_descriptor_async(session, style)
         face_anchor = "detailed face, clear facial features, sharp eyes"
         prompt = f"{desc}, {CHARACTER_IDENTITY_LOCK}, {face_anchor}, {style_desc}"
+        if user_feedback and user_feedback.strip():
+            prompt += f", 用户反馈：{user_feedback.strip()}"
         if negative:
             prompt += f" || negative: {negative}"
         return prompt
 
     async def _build_shot_prompt(
-        self, shot: Shot, characters: list[Character], *, style: str, session
+        self,
+        shot: Shot,
+        characters: list[Character],
+        *,
+        style: str,
+        session,
+        user_feedback: str | None = None,
     ) -> str:
         desc = shot.image_prompt or shot.description
         parts = [desc.strip()]
@@ -78,6 +93,8 @@ class RenderAgent(BaseAgent):
             parts.append(SHOT_CONTINUITY_LOCK)
         style_desc, negative = await self._style_descriptor_async(session, style)
         parts.append(style_desc)
+        if user_feedback and user_feedback.strip():
+            parts.append(f"用户反馈：{user_feedback.strip()}")
         if negative:
             parts.append(f"|| negative: {negative}")
         return ", ".join(parts)
@@ -120,8 +137,18 @@ class RenderAgent(BaseAgent):
                     current=i,
                     message=f"   正在绘制：{char.name} ({i + 1}/{total})",
                 )
+                entity_fb = (
+                    ctx.user_feedback
+                    if ctx.user_feedback
+                    and ctx.entity_type == "character"
+                    and (ctx.entity_id is None or ctx.entity_id == char.id)
+                    else None
+                )
                 image_prompt = await self._build_character_prompt(
-                    char, style=style, session=ctx.session
+                    char,
+                    style=style,
+                    session=ctx.session,
+                    user_feedback=entity_fb,
                 )
                 version = await self.version_service.auto_snapshot_character(
                     ctx.session,
@@ -290,8 +317,19 @@ class RenderAgent(BaseAgent):
                         "No character images available for shot %d; using text-to-image", shot.id
                     )
 
+                entity_fb = (
+                    ctx.user_feedback
+                    if ctx.user_feedback
+                    and ctx.entity_type == "shot"
+                    and (ctx.entity_id is None or ctx.entity_id == shot.id)
+                    else None
+                )
                 image_prompt = await self._build_shot_prompt(
-                    shot, characters, style=style, session=ctx.session
+                    shot,
+                    characters,
+                    style=style,
+                    session=ctx.session,
+                    user_feedback=entity_fb,
                 )
                 version = await self.version_service.auto_snapshot_shot(
                     ctx.session,
