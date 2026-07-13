@@ -10,9 +10,20 @@ vi.mock("react-router-dom", async () => {
 	);
 	return {
 		...actual,
-		Link: ({ children, to }: { children: ReactNode; to: string }) => (
-			<a href={to}>{children}</a>
+		Link: ({
+			children,
+			to,
+			...rest
+		}: {
+			children: ReactNode;
+			to: string;
+			[key: string]: unknown;
+		}) => (
+			<a href={to} {...rest}>
+				{children}
+			</a>
 		),
+		useLocation: () => ({ pathname: "/" }),
 	};
 });
 
@@ -38,27 +49,25 @@ vi.mock("~/stores/settingsStore", () => ({
 
 describe("TopBar", () => {
 	it("constrains the project dropdown and keeps project chrome app-level by default", () => {
-		const { container } = render(
-			<TopBar projectId={16} />,
-		);
+		const { container } = render(<TopBar projectId={16} />);
 
 		expect(container.querySelector("header")).toHaveClass("chrome-row", "px-2");
 		expect(container.querySelector("header")).toHaveAttribute("data-shell", "topbar");
-		expect(container.querySelector('button[aria-haspopup="listbox"]')).toHaveClass(
-			"max-w-[10rem]",
-			"sm:max-w-[14rem]",
-		);
-		expect(screen.queryByRole("button", { name: "资产库" })).not.toBeInTheDocument();
-		expect(screen.queryByRole("button", { name: "对话历史" })).not.toBeInTheDocument();
+		expect(
+			container.querySelector('button[aria-haspopup="listbox"]'),
+		).toHaveClass("max-w-[10rem]", "sm:max-w-[14rem]");
+		expect(screen.getAllByRole("navigation", { name: "主导航" }).length).toBeGreaterThan(0);
 		expect(screen.getByRole("button", { name: "切换暗色主题" })).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
 	});
 
-	it("keeps app-level controls only on the home chrome", () => {
+	it("exposes global nav on home chrome", () => {
 		render(<TopBar />);
 
-		expect(screen.queryByRole("button", { name: "资产库" })).not.toBeInTheDocument();
-		expect(screen.queryByRole("button", { name: "对话历史" })).not.toBeInTheDocument();
-		expect(screen.getByRole("link", { name: "openOii" })).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "openOii 首页" })).toBeInTheDocument();
+		// nav labels appear in both desktop+mobile; ensure present
+		expect(screen.getAllByRole("link", { name: /创作/ }).length).toBeGreaterThan(0);
+		expect(screen.getAllByRole("link", { name: /项目/ }).length).toBeGreaterThan(0);
+		expect(screen.getAllByRole("link", { name: /宇宙/ }).length).toBeGreaterThan(0);
 	});
 });

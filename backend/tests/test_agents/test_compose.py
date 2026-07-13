@@ -23,6 +23,14 @@ class FakeImageComposer:
         self.calls.append(("ref", kwargs))
         return b"fake_bytes"
 
+    async def compose_and_save_nine_grid_reference_image(self, **kwargs):
+        self.calls.append(("save_nine_grid", kwargs))
+        return "http://image.test/nine_grid.png"
+
+    async def compose_nine_grid_reference_image(self, **kwargs):
+        self.calls.append(("nine_grid", kwargs))
+        return b"fake_nine_grid_bytes"
+
 
 class FakeImageComposerFails:
     async def compose_and_save_reference_image(self, **kwargs):
@@ -30,6 +38,12 @@ class FakeImageComposerFails:
 
     async def compose_reference_image(self, **kwargs):
         raise RuntimeError("compose failed")
+
+    async def compose_and_save_nine_grid_reference_image(self, **kwargs):
+        raise RuntimeError("nine-grid failed")
+
+    async def compose_nine_grid_reference_image(self, **kwargs):
+        raise RuntimeError("nine-grid failed")
 
 
 class FakeDoubaoVideoService(DoubaoVideoService):
@@ -635,7 +649,7 @@ async def test_compose_agent_doubao_reference_mode(test_session, test_settings):
 
     await test_session.refresh(shot)
     assert shot.video_url == "http://video.test/doubao.mp4"
-    assert any(c[0] == "save_ref" for c in composer.calls)
+    assert any(c[0] == "save_nine_grid" for c in composer.calls)
 
 
 @pytest.mark.asyncio
@@ -705,8 +719,9 @@ async def test_compose_agent_non_doubao_reference_mode(test_session, test_settin
 
     await test_session.refresh(shot)
     assert shot.video_url == "http://video.test/non_doubao.mp4"
-    assert any(c[0] == "ref" for c in composer.calls)
+    assert any(c[0] == "nine_grid" for c in composer.calls)
     assert video.calls[0]["duration"] == 5.0
+    assert video.calls[0]["image_bytes"] == b"fake_nine_grid_bytes"
 
 
 @pytest.mark.asyncio
@@ -734,4 +749,4 @@ async def test_compose_agent_non_doubao_first_frame_mode(test_session, test_sett
 
     await test_session.refresh(shot)
     assert shot.video_url == "http://video.test/non_doubao.mp4"
-    assert any(c[0] == "ref" for c in composer.calls)
+    assert any(c[0] == "nine_grid" for c in composer.calls)

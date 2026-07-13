@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -175,7 +176,7 @@ describe('ProjectsPage', () => {
   it('renders project list and deletes a project through the confirmation flow', async () => {
     const user = userEvent.setup();
 
-    render(<ProjectsPage />);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
     expect(screen.getByText('Project 1')).toBeInTheDocument();
     expect(screen.getByText('Project 2')).toBeInTheDocument();
@@ -201,7 +202,7 @@ describe('ProjectsPage', () => {
   it('supports select all and batch deletion', async () => {
     const user = userEvent.setup();
 
-    render(<ProjectsPage />);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
     await user.click(screen.getByLabelText('全选'));
     await user.click(screen.getByRole('button', { name: '批量删除（2）' }));
@@ -229,7 +230,7 @@ describe('ProjectsPage', () => {
       error: null,
     };
 
-    render(<ProjectsPage />);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
     expect(screen.getByText('暂无项目')).toBeInTheDocument();
     expect(screen.getByText('开始创作你的第一个故事')).toBeInTheDocument();
@@ -247,7 +248,7 @@ describe('ProjectsPage', () => {
       error: apiError,
     };
 
-    render(<ProjectsPage />);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
     await waitFor(() => {
       expect(toastError).toHaveBeenCalled();
@@ -273,7 +274,7 @@ describe('ProjectsPage', () => {
       })
     );
 
-    render(<ProjectsPage />);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
     await user.click(screen.getByRole('button', { name: '删除项目 Project 2' }));
     await user.click(screen.getAllByRole('button', { name: '删除' }).at(-1) as HTMLButtonElement);
@@ -289,7 +290,7 @@ describe('ProjectsPage', () => {
   });
 
   it('labels per-project selection and delete controls for assistive technology', () => {
-    render(<ProjectsPage />);
+    render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 
     expect(screen.getByRole('checkbox', { name: '选择项目 Project 1' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: '选择项目 Project 2' })).toBeInTheDocument();

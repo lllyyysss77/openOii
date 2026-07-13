@@ -113,6 +113,46 @@ class AudioService:
             self._bgm_dir = _ensure_bgm_dir(self.settings)
         return self._bgm_dir
 
+    async def _generate_local_tts_placeholder(self, text: str, output_path: Path) -> bool:
+        """Offline TTS placeholder via ffmpeg. Never calls network."""
+        duration = max(1.0, min(6.0, len(text.strip()) * 0.12))
+        freq = 380 + (sum(ord(ch) for ch in text[:16]) % 180)
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency={freq}:sample_rate=44100:duration={duration:.2f}",
+            "-af",
+            "volume=0.18",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "128k",
+            str(output_path),
+        ]
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await process.communicate()
+            if process.returncode != 0:
+                logger.warning(
+                    "Local TTS placeholder failed: %s",
+                    stderr.decode(errors="ignore")[:300],
+                )
+                return False
+            return output_path.exists() and output_path.stat().st_size > 100
+        except FileNotFoundError:
+            logger.warning("ffmpeg not found; cannot create local TTS placeholder")
+            return False
+        except Exception:
+            logger.warning("Local TTS placeholder error", exc_info=True)
+            return False
+
     async def generate_tts(
         self,
         text: str,
@@ -120,37 +160,49 @@ class AudioService:
         rate: str = "+0%",
         pitch: str = "+0Hz",
     ) -> str | None:
-        """用 Edge TTS 生成语音，返回音频文件 URL
+        """Generate speech URL.
 
-        Args:
-            text: 要合成的文本
-            voice: Edge TTS 语音名称
-            rate: 语速调整（如 "+10%" 或 "-5%"）
-            pitch: 音调调整（如 "+2Hz" 或 "-3Hz"）
-
-        Returns:
-            音频文件 URL（如 /static/audio/tts_xxx.mp3），失败返回 None
+        Prefer Edge TTS when online providers are configured. When any of
+        text/image/video providers is fake, or Edge TTS is unavailable, fall
+        back to a local ffmpeg placeholder so the full pipeline stays offline.
         """
         if not text or not text.strip():
             return None
 
-        try:
-            import edge_tts
-        except ImportError:
-            logger.warning("edge-tts not installed, skipping TTS generation")
-            return None
-
         filename = f"tts_{uuid.uuid4().hex[:8]}.mp3"
         output_path = AUDIO_OUTPUT_DIR / filename
+        offline = any(
+            str(getattr(self.settings, key, "") or "").lower() == "fake"
+            for key in ("text_provider", "image_provider", "video_provider")
+        )
 
-        try:
-            communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
-            await communicate.save(str(output_path))
-            logger.info("TTS generated: %s (voice=%s, text=%s...)", output_path, voice, text[:30])
+        if not offline:
+            try:
+                import edge_tts
+
+                communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
+                await communicate.save(str(output_path))
+                logger.info(
+                    "TTS generated: %s (voice=%s, text=%s...)",
+                    output_path,
+                    voice,
+                    text[:30],
+                )
+                return f"/static/audio/{filename}"
+            except ImportError:
+                logger.warning("edge-tts not installed, falling back to local TTS placeholder")
+            except Exception:
+                logger.warning(
+                    "TTS generation failed (text=%s..., voice=%s), falling back to local placeholder",
+                    text[:30],
+                    voice,
+                    exc_info=True,
+                )
+
+        if await self._generate_local_tts_placeholder(text, output_path):
+            logger.info("Local TTS placeholder generated: %s", output_path)
             return f"/static/audio/{filename}"
-        except Exception:
-            logger.warning("TTS generation failed (text=%s..., voice=%s)", text[:30], voice, exc_info=True)
-            return None
+        return None
 
     async def generate_character_tts(
         self,

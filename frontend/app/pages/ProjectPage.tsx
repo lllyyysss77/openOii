@@ -31,7 +31,7 @@ import {
 	deriveWorkbenchStatus,
 	type LastRunTerminalStatus,
 } from "~/features/comic-workflow/state/deriveWorkbenchStatus";
-import { projectsApi } from "~/services/api";
+import { projectsApi, exportApi, getStaticUrl } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
 import type {
 	ProjectProviderSettings,
@@ -41,11 +41,16 @@ import type {
 } from "~/types";
 import { ApiError } from "~/types/errors";
 import { toast } from "~/utils/toast";
-import { isWorkflowStage } from "~/utils/workflowStage";
+import { toSimplifiedStage } from "~/utils/workflowStage";
 
 const VersionCompareDrawer = lazy(() =>
 	import("~/components/panels/VersionCompareDrawer").then((m) => ({
 		default: m.VersionCompareDrawer,
+	})),
+);
+const ConsistencyPanel = lazy(() =>
+	import("~/components/panels/ConsistencyPanel").then((m) => ({
+		default: m.ConsistencyPanel,
 	})),
 );
 
@@ -106,6 +111,8 @@ export function ProjectPage() {
 	const [lastRunStatus, setLastRunStatus] =
 		useState<LastRunTerminalStatus>(null);
 	const [versionOpen, setVersionOpen] = useState(false);
+	const [consistencyOpen, setConsistencyOpen] = useState(false);
+	const [exporting, setExporting] = useState(false);
 	const [versionTarget, setVersionTarget] = useState<{
 		entityType: VersionEntityType;
 		entityId: number;
@@ -323,18 +330,20 @@ export function ProjectPage() {
 				retryCount.current = 0;
 				const control = apiError?.response as RecoveryControlRead | undefined;
 				if (control) {
-					useEditorStore.getState().setRecoveryControl(control);
-					useEditorStore
-						.getState()
-						.setRecoverySummary(control.recovery_summary);
-					useEditorStore.getState().setCurrentRunId(control.active_run.id);
-					useEditorStore.getState().setGenerating(control.state === "active");
+					const s = useEditorStore.getState();
+					s.setRecoveryControl(control);
+					s.setRecoverySummary(control.recovery_summary);
+					s.setCurrentRunId(control.active_run.id);
+					s.setGenerating(control.state === "active");
 					if (control.state === "active") {
-						useEditorStore
-							.getState()
-							.setCurrentAgent(control.active_run.current_agent);
-						useEditorStore.getState().setProgress(control.active_run.progress);
+						s.setCurrentAgent(control.active_run.current_agent);
+						s.setProgress(control.active_run.progress);
 					}
+					const stage = toSimplifiedStage(
+						control.recovery_summary.next_stage ??
+							control.recovery_summary.current_stage,
+					);
+					if (stage) s.setCurrentStage(stage);
 				} else {
 					toast.warning({
 						title: "请稍等片刻",
@@ -372,12 +381,48 @@ export function ProjectPage() {
 				payload.entityId,
 				payload.entityIds?.length ? payload.entityIds : undefined,
 			),
+		onSuccess: (result) => {
+			// Feedback starts a review-routed run; bind immediately so cancel/confirm work
+			// even before the first WS event arrives.
+			if (result?.run_id) {
+				const s = useEditorStore.getState();
+				s.setCurrentRunId(result.run_id);
+				s.setGenerating(true);
+				s.setCurrentAgent("review");
+				s.setCurrentStage("review");
+				s.setProgress(0);
+				s.setRecoveryControl(null);
+				s.setRecoverySummary(null);
+			}
+		},
 		onError: (error: Error | ApiError) => {
 			const apiError = error instanceof ApiError ? error : null;
 			const isConflict =
 				apiError?.status === 409 || error.message.includes("409");
 
 			if (isConflict) {
+				const control = apiError?.response as RecoveryControlRead | undefined;
+				if (control?.active_run && control.recovery_summary) {
+					const s = useEditorStore.getState();
+					s.setRecoveryControl(control);
+					s.setRecoverySummary(control.recovery_summary);
+					s.setCurrentRunId(control.active_run.id);
+					s.setGenerating(control.state === "active");
+					if (control.state === "active") {
+						s.setCurrentAgent(control.active_run.current_agent);
+						s.setProgress(control.active_run.progress);
+					}
+					const stage = toSimplifiedStage(
+						control.recovery_summary.next_stage ??
+							control.recovery_summary.current_stage,
+					);
+					if (stage) s.setCurrentStage(stage);
+					toast.info({
+						title: "已有任务进行中",
+						message: "已恢复当前运行控制，请先确认或停止",
+					});
+					return;
+				}
 				toast.info({
 					title: "AI 正在思考",
 					message: "请等待当前任务完成",
@@ -427,10 +472,11 @@ export function ProjectPage() {
 			s.setProgress(run.progress);
 			s.setCurrentRunProviderSnapshot(run.provider_snapshot ?? null);
 			if (control) {
-				const nextStage =
+				const nextStage = toSimplifiedStage(
 					control.recovery_summary.next_stage ??
-					control.recovery_summary.current_stage;
-				if (isWorkflowStage(nextStage)) {
+						control.recovery_summary.current_stage,
+				);
+				if (nextStage) {
 					s.setCurrentStage(nextStage);
 				}
 			}
@@ -703,6 +749,49 @@ export function ProjectPage() {
 		],
 	);
 
+
+	const handleOpenVersions = () => {
+		setVersionTarget(null);
+		setVersionOpen(true);
+	};
+
+	const handleExportWebtoon = async () => {
+		if (exporting) return;
+		setExporting(true);
+		try {
+			const started = await exportApi.triggerWebtoon(projectId);
+			const poll = async (exportId: string): Promise<void> => {
+				const response = await exportApi.getStatus(projectId, exportId);
+				if (response.status === "processing") {
+					await new Promise((r) => setTimeout(r, 2000));
+					return poll(exportId);
+				}
+				if (response.status === "completed" && response.download_url) {
+					const url = getStaticUrl(response.download_url);
+					toast.success({
+						title: "导出完成",
+						message: "Webtoon 长图已生成",
+						duration: 8000,
+						actions: url
+							? [{ label: "下载", onClick: () => window.open(url, "_blank"), variant: "primary" }]
+							: undefined,
+					});
+					return;
+				}
+				toast.error({ title: "导出失败", message: "生成失败，请重试" });
+			};
+			toast.info({ title: "导出中", message: "正在生成 Webtoon 长图", duration: 4000 });
+			await poll(started.export_id);
+		} catch (error) {
+			toast.error({
+				title: "导出失败",
+				message: error instanceof Error ? error.message : "未知错误",
+			});
+		} finally {
+			setExporting(false);
+		}
+	};
+
 	if (workspaceLoading) {
 		return (
 			<div className="page-shell items-center justify-center gap-3 bg-base-100">
@@ -754,6 +843,10 @@ export function ProjectPage() {
 					setWorkspaceCollapsed(false);
 				}}
 				generateDisabled={generateMutation.isPending || hasActiveRun}
+				onOpenVersions={handleOpenVersions}
+				onOpenConsistency={() => setConsistencyOpen(true)}
+				onExport={handleExportWebtoon}
+				exportBusy={exporting}
 			/>
 
 			{/* OiiOii-style: Agent/chat left · canvas right */}
@@ -805,6 +898,15 @@ export function ProjectPage() {
 						initialEntityType={versionTarget?.entityType}
 						initialEntityId={versionTarget?.entityId ?? null}
 						onClose={() => setVersionOpen(false)}
+					/>
+				</Suspense>
+			)}
+
+			{consistencyOpen && (
+				<Suspense fallback={null}>
+					<ConsistencyPanel
+						projectId={project.id}
+						onClose={() => setConsistencyOpen(false)}
 					/>
 				</Suspense>
 			)}

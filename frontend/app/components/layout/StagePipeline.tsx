@@ -5,6 +5,9 @@ import {
 	StopIcon,
 	SparklesIcon,
 	ChatBubbleLeftRightIcon,
+	ClockIcon,
+	ShieldCheckIcon,
+	ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 import type { WorkflowStage } from "~/types";
 import { STAGE_PIPELINE, getPipelineStageIndex } from "~/utils/pipeline";
@@ -23,6 +26,13 @@ interface StagePipelineProps {
 	onCancel: () => void;
 	onToggleChat?: () => void;
 	generateDisabled?: boolean;
+	/** Open version history / compare drawer. */
+	onOpenVersions?: () => void;
+	/** Open consistency report panel. */
+	onOpenConsistency?: () => void;
+	/** Trigger export (e.g. webtoon). */
+	onExport?: () => void;
+	exportBusy?: boolean;
 }
 
 const STATUS_DOT: Record<WorkbenchStatus["state"], string> = {
@@ -51,11 +61,16 @@ export function StagePipeline({
 	onCancel,
 	onToggleChat,
 	generateDisabled,
+	onOpenVersions,
+	onOpenConsistency,
+	onExport,
+	exportBusy = false,
 }: StagePipelineProps) {
 	const currentIndex = getPipelineStageIndex(currentStage);
 	const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
 	const generateLabel =
 		workbenchStatus.state === "idle" ? "开始生成" : "重新生成";
+	const hasTools = Boolean(onOpenVersions || onOpenConsistency || onExport);
 
 	return (
 		<div
@@ -138,6 +153,58 @@ export function StagePipeline({
 			</nav>
 
 			<div className="flex shrink-0 items-center gap-1">
+				{hasTools ? (
+					<div
+						className="mr-0.5 hidden items-center gap-0.5 border-r border-base-content/10 pr-1 sm:flex"
+						role="group"
+						aria-label="工作台工具"
+					>
+						{onOpenVersions ? (
+							<Button
+								variant="ghost"
+								size="sm"
+								className={chromeBtn}
+								onClick={onOpenVersions}
+								aria-label="打开版本对比"
+								title="版本"
+							>
+								<ClockIcon className="h-3.5 w-3.5" aria-hidden="true" />
+								<span className="hidden lg:inline">版本</span>
+							</Button>
+						) : null}
+						{onOpenConsistency ? (
+							<Button
+								variant="ghost"
+								size="sm"
+								className={chromeBtn}
+								onClick={onOpenConsistency}
+								aria-label="打开一致性报告"
+								title="一致性"
+							>
+								<ShieldCheckIcon className="h-3.5 w-3.5" aria-hidden="true" />
+								<span className="hidden lg:inline">一致性</span>
+							</Button>
+						) : null}
+						{onExport ? (
+							<Button
+								variant="ghost"
+								size="sm"
+								className={chromeBtn}
+								onClick={onExport}
+								disabled={exportBusy || isGenerating}
+								aria-label="导出 Webtoon 长图"
+								title="导出"
+								loading={exportBusy}
+							>
+								{exportBusy ? null : (
+									<ArrowDownTrayIcon className="h-3.5 w-3.5" aria-hidden="true" />
+								)}
+								<span className="hidden lg:inline">导出</span>
+							</Button>
+						) : null}
+					</div>
+				) : null}
+
 				{hasRecovery && !isGenerating ? (
 					<>
 						<Button

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { exportApi } from "~/services/api";
+import { projectsApi } from "~/services/api";
 import { ComicCanvasToolbar } from "./ComicCanvasToolbar";
 
 const editorMock = {
@@ -21,11 +21,9 @@ vi.mock("tldraw", () => ({
 }));
 
 vi.mock("~/services/api", () => ({
-	exportApi: {
-		triggerWebtoon: vi.fn(),
-		getStatus: vi.fn(),
+	projectsApi: {
+		fillEmptyShots: vi.fn(),
 	},
-	getStaticUrl: (path: string) => path,
 }));
 
 vi.mock("~/utils/toast", () => ({
@@ -53,37 +51,30 @@ describe("ComicCanvasToolbar", () => {
 		expect(screen.queryByLabelText("一致性评估")).not.toBeInTheDocument();
 	});
 
-	it("does not render shot sorting controls", () => {
+	it("does not render shot sorting controls when not provided", () => {
 		renderToolbar();
 
-		expect(screen.queryByLabelText("重排镜头顺序")).not.toBeInTheDocument();
-		expect(screen.queryByLabelText("保存镜头顺序")).not.toBeInTheDocument();
-		expect(screen.queryByLabelText("撤销镜头重排")).not.toBeInTheDocument();
+		expect(screen.queryByLabelText("排序九宫格")).not.toBeInTheDocument();
+		expect(screen.queryByLabelText("完成分镜排序")).not.toBeInTheDocument();
 	});
 
-	it("exports Webtoon directly without showing a PDF option", async () => {
-		const user = userEvent.setup();
-		vi.mocked(exportApi.triggerWebtoon).mockResolvedValue({
-			export_id: "export-1",
-			project_id: 15,
-			format: "webtoon",
-			status: "processing",
-			download_url: null,
-			created_at: "",
-		});
-		vi.mocked(exportApi.getStatus).mockResolvedValue({
-			export_id: "export-1",
-			project_id: 15,
-			format: "webtoon",
-			status: "completed",
-			download_url: "/static/exports/story_webtoon.png",
-			created_at: "",
-		});
+	it("does not keep export in canvas toolbar (moved to stage chrome)", () => {
 		renderToolbar();
 
-		await user.click(screen.getByLabelText("导出 Webtoon 长图"));
+		expect(screen.queryByLabelText("导出 Webtoon 长图")).not.toBeInTheDocument();
+	});
 
-		expect(screen.queryByRole("button", { name: "PDF 漫画册" })).not.toBeInTheDocument();
-		expect(exportApi.triggerWebtoon).toHaveBeenCalledWith(15);
+	it("fills empty first-frame cells", async () => {
+		const user = userEvent.setup();
+		vi.mocked(projectsApi.fillEmptyShots).mockResolvedValue({
+			id: 1,
+			project_id: 15,
+			status: "queued",
+		} as never);
+		renderToolbar();
+
+		await user.click(screen.getByLabelText("补齐空格 · 首帧"));
+
+		expect(projectsApi.fillEmptyShots).toHaveBeenCalledWith(15, "image");
 	});
 });

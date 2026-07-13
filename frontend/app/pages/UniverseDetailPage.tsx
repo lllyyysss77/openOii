@@ -3,7 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { universesApi } from "~/services/api";
 import { SharedCharacterCard } from "~/components/universe/SharedCharacterCard";
-import { Card } from "~/components/ui/Card";
+import { EmptyState } from "~/components/ui/EmptyState";
+import { SectionCard } from "~/components/ui/SectionCard";
 import { Button } from "~/components/ui/Button";
 import { Input } from "~/components/ui/Input";
 import { Modal } from "~/components/ui/Modal";
@@ -19,6 +20,8 @@ import {
 import { toast } from "~/utils/toast";
 import type { SharedCharacterRead, UniverseDetail } from "~/types";
 import { PageBody, PageShell } from "~/components/layout/PageShell";
+import { PageContent, PageHeader } from "~/components/layout/PageHeader";
+import { TopBar } from "~/components/layout/TopBar";
 
 export function UniverseDetailPage() {
 	const { universeId } = useParams<{ universeId: string }>();
@@ -123,16 +126,25 @@ export function UniverseDetailPage() {
 
 	if (isLoading) {
 		return (
-			<PageShell className="items-center justify-center">
-				<span className="loading loading-spinner loading-lg text-primary" />
+			<PageShell data-shell="universe-detail-loading">
+				<TopBar />
+				<div className="flex flex-1 items-center justify-center">
+					<span className="loading loading-spinner loading-md text-primary" aria-label="加载中" />
+				</div>
 			</PageShell>
 		);
 	}
 
 	if (!universe) {
 		return (
-			<PageShell className="items-center justify-center">
-				<p className="text-base-content/50">宇宙不存在</p>
+			<PageShell data-shell="universe-detail-missing">
+				<TopBar />
+				<div className="flex flex-1 flex-col items-center justify-center gap-3">
+					<p className="m-0 text-[length:var(--text-sm)] text-base-content/50">宇宙不存在</p>
+					<Link to="/universes">
+						<Button size="sm" variant="secondary">返回宇宙列表</Button>
+					</Link>
+				</div>
 			</PageShell>
 		);
 	}
@@ -170,89 +182,81 @@ export function UniverseDetailPage() {
 
 	return (
 		<PageShell data-shell="universe-detail">
-			<header className="chrome-row z-[var(--z-fixed)] gap-2 border-b border-base-content/12 bg-base-200 px-2 sm:px-3">
-				<div className="flex flex-1 items-center gap-1">
-					<Link
-						to="/universes"
-						className="btn btn-ghost btn-sm touch-target-dense h-8 min-h-8"
-					>
-						← 返回宇宙列表
-					</Link>
-					<button
-						type="button"
-						className="btn btn-ghost btn-sm touch-target-dense h-8 min-h-8 gap-1"
-						onClick={openEdit}
-					>
-						<PencilSquareIcon className="h-3.5 w-3.5" />
-						编辑设定
-					</button>
-				</div>
-				<div className="flex flex-1 justify-end">
-					<Link
-						to={createChapterHref}
-						className="btn-doodle touch-target-dense inline-flex h-8 min-h-8 items-center gap-1 bg-primary px-2 text-[length:var(--text-2xs)] font-heading text-primary-content"
-					>
-						<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
-						新建章节
-					</Link>
-				</div>
-			</header>
+			<TopBar />
 
-			<PageBody className="mx-auto w-full max-w-6xl space-y-[var(--space-3)] px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)]">
-				<div>
-					<h1 className="m-0 font-heading text-[length:var(--text-xl)] font-bold leading-tight text-pretty">
-						{u.name}
-					</h1>
-					{u.description ? (
-						<p className="m-0 mt-1 text-[length:var(--text-sm)] text-base-content/60">
-							{u.description}
-						</p>
-					) : (
-						<p className="m-0 mt-1 text-[length:var(--text-2xs)] text-base-content/40">
-							尚未填写简介 · 点击顶栏「编辑设定」
-						</p>
-					)}
-				</div>
+			<PageBody>
+				<PageContent>
+				<PageHeader
+					eyebrow="universe detail"
+					title={u.name}
+					description={
+						u.description ||
+						"尚未填写简介 · 可在右侧编辑设定"
+					}
+					meta={`${u.chapters.length} 章 · ${u.shared_characters.length} 角色`}
+					actions={
+						<>
+							<Link
+								to="/universes"
+								className="btn btn-ghost btn-sm touch-target-dense h-8 min-h-8"
+							>
+								← 列表
+							</Link>
+							<Button size="sm" variant="ghost" onClick={openEdit}>
+								<PencilSquareIcon className="h-3.5 w-3.5" aria-hidden="true" />
+								编辑
+							</Button>
+							<Link to={createChapterHref}>
+								<Button size="sm">
+									<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+									新建章节
+								</Button>
+							</Link>
+						</>
+					}
+				/>
+
 
 				{u.world_setting ? (
-					<Card className="!p-3" variant="primary">
-						<h2 className="mb-1 flex items-center gap-1.5 font-heading text-[length:var(--text-md)] font-bold">
-							<GlobeAltIcon className="h-4 w-4" aria-hidden="true" />
-							世界观设定
-						</h2>
+					<SectionCard
+						title="世界观设定"
+						icon={<GlobeAltIcon className="h-4 w-4" aria-hidden="true" />}
+						variant="primary"
+					>
 						<p className="m-0 whitespace-pre-wrap text-[length:var(--text-sm)] text-base-content/70">
 							{u.world_setting}
 						</p>
-					</Card>
+					</SectionCard>
 				) : null}
 
 				{u.style_rules ? (
-					<Card className="!p-3" variant="accent">
-						<h2 className="mb-1 flex items-center gap-1.5 font-heading text-[length:var(--text-md)] font-bold">
-							<PaintBrushIcon className="h-4 w-4" aria-hidden="true" />
-							统一风格规则
-						</h2>
+					<SectionCard
+						title="统一风格规则"
+						icon={<PaintBrushIcon className="h-4 w-4" aria-hidden="true" />}
+						variant="accent"
+					>
 						<p className="m-0 whitespace-pre-wrap text-[length:var(--text-sm)] text-base-content/70">
 							{u.style_rules}
 						</p>
-					</Card>
+					</SectionCard>
 				) : null}
 
-				<Card className="!p-3">
-					<div className="mb-2 flex items-center justify-between gap-2">
-						<h2 className="m-0 flex items-center gap-1.5 font-heading text-[length:var(--text-md)] font-bold">
-							<BookOpenIcon className="h-4 w-4" aria-hidden="true" />
-							章节列表
-						</h2>
-						<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/40">
-							{u.chapters.length} 章
-						</span>
-					</div>
-
+				<SectionCard
+					title="章节列表"
+					icon={<BookOpenIcon className="h-4 w-4" aria-hidden="true" />}
+					meta={`${u.chapters.length} 章`}
+				>
 					{u.chapters.length === 0 ? (
-						<p className="py-6 text-center text-[length:var(--text-sm)] text-base-content/40">
-							还没有章节，从顶栏新建第一个工作区
-						</p>
+						<EmptyState
+							compact
+							title="还没有章节"
+							description="从顶栏「新建章节」创建第一个工作区"
+							action={
+								<Link to={createChapterHref}>
+									<Button size="sm">新建章节</Button>
+								</Link>
+							}
+						/>
 					) : (
 						<div className="space-y-1">
 							{[...u.chapters]
@@ -263,7 +267,7 @@ export function UniverseDetailPage() {
 								.map((ch) => (
 									<div
 										key={ch.id}
-										className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] bg-base-200/50 px-2 py-1.5 transition-colors duration-[var(--duration-fast)] hover:bg-base-200"
+										className="flex min-h-10 items-center justify-between gap-2 rounded-[var(--radius-md)] border border-base-content/8 bg-base-200/50 px-2 py-1.5 transition-colors duration-[var(--duration-fast)] hover:bg-base-200"
 									>
 										<div className="flex min-w-0 items-center gap-2">
 											<span className="badge badge-primary badge-sm shrink-0 font-bold tabular-nums">
@@ -286,7 +290,7 @@ export function UniverseDetailPage() {
 										</div>
 										<button
 											type="button"
-											className="btn btn-ghost btn-xs text-error/50 hover:text-error"
+											className="btn btn-ghost btn-xs h-7 min-h-7 text-error/50 hover:text-error"
 											aria-label={`从宇宙移除${ch.chapter_title || ch.project_title || "未命名项目"}`}
 											title="从宇宙移除"
 											onClick={() =>
@@ -299,39 +303,42 @@ export function UniverseDetailPage() {
 								))}
 						</div>
 					)}
-				</Card>
+				</SectionCard>
 
-				<Card className="!p-3">
-					<div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-						<h2 className="m-0 flex items-center gap-1.5 font-heading text-[length:var(--text-md)] font-bold">
-							<UserGroupIcon className="h-4 w-4" aria-hidden="true" />
-							共享角色库
-						</h2>
-						<div className="flex flex-wrap items-center gap-2">
+				<SectionCard
+					title="共享角色库"
+					icon={<UserGroupIcon className="h-4 w-4" aria-hidden="true" />}
+					meta={`${u.shared_characters.length} 个`}
+					actions={
+						<>
 							<label className="flex items-center gap-1 text-[length:var(--text-2xs)] text-base-content/55">
-								导入到项目
+								导入到
 								<input
 									className="input input-bordered input-xs h-7 w-20 font-mono"
 									placeholder={defaultImportProjectId || "ID"}
 									value={importProjectId}
 									onChange={(e) => setImportProjectId(e.target.value)}
 									inputMode="numeric"
+									aria-label="导入到项目 ID"
 								/>
 							</label>
-							<Button
-								size="sm"
-								className="h-8 min-h-8"
-								onClick={() => setCreateCharOpen(true)}
-							>
+							<Button size="sm" onClick={() => setCreateCharOpen(true)}>
 								+ 手动创建
 							</Button>
-						</div>
-					</div>
-
+						</>
+					}
+				>
 					{u.shared_characters.length === 0 ? (
-						<p className="py-6 text-center text-[length:var(--text-sm)] text-base-content/40">
-							还没有共享角色。可在章节工作台把角色「提升到宇宙」，或在此手动创建。
-						</p>
+						<EmptyState
+							compact
+							title="还没有共享角色"
+							description="可在章节工作台把角色「提升到宇宙」，或在此手动创建"
+							action={
+								<Button size="sm" variant="secondary" onClick={() => setCreateCharOpen(true)}>
+									手动创建
+								</Button>
+							}
+						/>
 					) : (
 						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
 							{u.shared_characters.map((sc) => (
@@ -344,7 +351,8 @@ export function UniverseDetailPage() {
 							))}
 						</div>
 					)}
-				</Card>
+				</SectionCard>
+				</PageContent>
 			</PageBody>
 
 			<Modal

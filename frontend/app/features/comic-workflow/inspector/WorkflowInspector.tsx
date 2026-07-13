@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "~/components/ui/Button";
+import { EmptyState } from "~/components/ui/EmptyState";
 import { SvgIcon } from "~/components/ui/SvgIcon";
 import { canvasEvents } from "~/components/canvas/canvasEvents";
 import {
@@ -65,13 +66,13 @@ export function WorkflowInspector({
 
 	if (!selectedNode && multiShotIds.length === 0) {
 		return (
-			<div className="flex h-full flex-col items-center justify-center px-4 text-center text-[length:var(--text-xs)] text-base-content/45">
-				<SvgIcon name="layers" size={22} className="mb-2 opacity-40" />
-				<p className="m-0">选择画布卡片查看细节</p>
-				<p className="m-0 mt-1 text-[length:var(--text-2xs)] text-base-content/35">
-					可多选分镜格 · 批量重做本格
-				</p>
-			</div>
+			<EmptyState
+				compact
+				icon={<SvgIcon name="layers" size={22} />}
+				title="选择画布卡片"
+				description="可多选分镜格 · 批量重做本格"
+				className="h-full"
+			/>
 		);
 	}
 
@@ -535,31 +536,32 @@ function MultiShotActions({
 
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-base-100 p-2" data-shell="inspector-multi">
-			<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/40">
+			<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/40">
 				multi-shot
 			</p>
 			<h2 className="m-0 font-heading text-[length:var(--text-sm)] font-bold">
 				已选 {shotIds.length} 格
 			</h2>
 			<p className="m-0 mt-1 text-[length:var(--text-2xs)] text-base-content/55">
-				九宫格多选：可批量重做首帧或视频，不改其他格。
+				批量只动选中格 · 不改其他分镜
 			</p>
-			<div className="mt-3 space-y-2">
+			<div className="mt-2 space-y-1.5">
 				{structureLocked ? (
-					<div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-xs text-warning">
+					<div className="rounded-[var(--radius-md)] border border-warning/25 bg-warning/10 px-2 py-1.5 text-[length:var(--text-2xs)] text-warning">
 						生成运行中，批量操作已锁定。
 					</div>
 				) : null}
 				<ActionButton
 					icon="refresh-cw"
-					label={`批量重做首帧（${shotIds.length}）`}
+					label={`重做首帧 · ${shotIds.length} 格`}
+					primary
 					disabled={writeDisabled}
 					loading={busy === "image"}
 					onClick={() => batchRegen("image")}
 				/>
 				<ActionButton
 					icon="play"
-					label={`批量重做视频（${shotIds.length}）`}
+					label={`重做视频 · ${shotIds.length} 格`}
 					disabled={writeDisabled}
 					loading={busy === "video"}
 					onClick={() => batchRegen("video")}
@@ -737,12 +739,12 @@ function ActionsTab({
 	return (
 		<ActionStack>
 			{structureLocked ? (
-				<div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-xs text-warning">
+				<div className="rounded-[var(--radius-md)] border border-warning/25 bg-warning/10 px-2 py-1.5 text-[length:var(--text-2xs)] text-warning">
 					生成运行中，结构写入操作已锁定。
 				</div>
 			) : null}
 			{shotCellLabel ? (
-				<div className="rounded-lg border border-accent/30 bg-accent/10 p-3 text-xs leading-relaxed text-base-content/70">
+				<div className="rounded-[var(--radius-md)] border border-accent/30 bg-accent/10 px-2 py-1.5 text-[length:var(--text-2xs)] leading-relaxed text-base-content/70">
 					<strong className="text-accent">{shotCellLabel}</strong>
 					{" · "}
 					重做只刷新这一格，不影响其他分镜与角色资产。也可在对话里绑定本格发反馈；可多选多格批量重做。
@@ -750,7 +752,8 @@ function ActionsTab({
 			) : null}
 			<ActionButton
 				icon="check"
-				label="批准"
+				label={node.status === "approved" ? "已批准" : "批准此节点"}
+				primary
 				disabled={writeDisabled || node.status === "approved"}
 				loading={busy === "approve"}
 				onClick={approve}
@@ -759,14 +762,14 @@ function ActionsTab({
 				<>
 					<ActionButton
 						icon="refresh-cw"
-						label={`重做本格 · 首帧图（${shotCellLabel}）`}
+						label={`重做首帧 · ${shotCellLabel}`}
 						disabled={writeDisabled}
 						loading={busy === "regenerate"}
 						onClick={() => regenerate("image")}
 					/>
 					<ActionButton
 						icon="play"
-						label={`重做本格 · 视频（${shotCellLabel}）`}
+						label={`重做视频 · ${shotCellLabel}`}
 						disabled={writeDisabled}
 						loading={busy === "regenerate-video"}
 						onClick={() => regenerate("video")}
@@ -840,7 +843,7 @@ function deleteMessage(node: ComicWorkflowNode): string {
 }
 
 function ActionStack({ children }: { children: ReactNode }) {
-	return <div className="space-y-2">{children}</div>;
+	return <div className="space-y-1.5">{children}</div>;
 }
 
 function ActionButton({
@@ -849,6 +852,7 @@ function ActionButton({
 	disabled,
 	loading,
 	danger,
+	primary,
 	onClick,
 }: {
 	icon: Parameters<typeof SvgIcon>[0]["name"];
@@ -856,18 +860,19 @@ function ActionButton({
 	disabled?: boolean;
 	loading?: boolean;
 	danger?: boolean;
+	primary?: boolean;
 	onClick: () => void;
 }) {
 	return (
 		<Button
-			variant={danger ? "error" : "ghost"}
+			variant={danger ? "error" : primary ? "primary" : "ghost"}
 			size="sm"
-			className={`w-full justify-start gap-2 ${danger ? "text-error" : ""}`}
+			className={`w-full justify-start gap-1.5 !h-8 !min-h-8 text-[length:var(--text-xs)] ${danger ? "text-error" : ""}`}
 			disabled={disabled}
 			loading={loading}
 			onClick={onClick}
 		>
-			<SvgIcon name={icon} size={14} />
+			<SvgIcon name={icon} size={13} />
 			{label}
 		</Button>
 	);
@@ -883,7 +888,7 @@ function FormShell({
 	return (
 		<fieldset className="space-y-3" disabled={disabled}>
 			{disabled ? (
-				<div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-xs text-warning">
+				<div className="rounded-[var(--radius-md)] border border-warning/25 bg-warning/10 px-2 py-1.5 text-[length:var(--text-2xs)] text-warning">
 					生成运行中，保存操作已锁定。
 				</div>
 			) : null}

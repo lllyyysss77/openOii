@@ -519,9 +519,9 @@ export const configApi = {
 					const token = config.ADMIN_TOKEN;
 					if (typeof token === "string" && token.length > 0) {
 						localStorage.setItem("openoii_admin_token", token);
-				} else {
-					localStorage.removeItem("openoii_admin_token");
-				}
+					} else {
+						localStorage.removeItem("openoii_admin_token");
+					}
 				}
 				return res;
 			})

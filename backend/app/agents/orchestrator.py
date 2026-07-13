@@ -14,7 +14,7 @@ from app.agents.outline import OutlineAgent
 from app.agents.plan import PlanAgent
 from app.agents.render import RenderAgent
 from app.agents.compose import ComposeAgent
-from app.agents.review_rules import ReviewRuleEngine
+from app.agents.review_rules import ReviewAgent
 from app.config import Settings
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.project import Character, Project, Shot
@@ -254,7 +254,7 @@ class GenerationOrchestrator:
             PlanAgent(),
             RenderAgent(),
             ComposeAgent(),
-            ReviewRuleEngine(),  # 处理用户反馈并路由重新生成（不会参与正常生成流程）
+            ReviewAgent(),  # 处理用户反馈并路由重新生成（不会参与正常生成流程）
         ]
 
     def _agent_index(self, agent_name: str) -> int:
@@ -1141,7 +1141,7 @@ class GenerationOrchestrator:
                     if ctx.entity_id is None and ctx.entity_ids:
                         ctx.entity_id = ctx.entity_ids[0]
 
-                review_agent = cast(ReviewRuleEngine, self.agents[self._agent_index("review")])
+                review_agent = cast(ReviewAgent, self.agents[self._agent_index("review")])
 
                 await self._set_run(run, current_agent=review_agent.name, progress=0.0)
                 await self.ws.send_event(

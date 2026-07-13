@@ -109,3 +109,26 @@ async def test_ffmpeg_mix_maps_only_primary_video_stream(tmp_path, monkeypatch):
     cmd = captured["cmd"]
     first_map = cmd.index("-map")
     assert cmd[first_map + 1] == "0:v:0"
+
+
+@pytest.mark.asyncio
+async def test_generate_tts_uses_local_placeholder_when_fake_provider(tmp_path, monkeypatch):
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    monkeypatch.setattr(audio_service, "AUDIO_OUTPUT_DIR", audio_dir)
+
+    svc = AudioService(
+        make_settings(
+            text_provider="fake",
+            image_provider="fake",
+            video_provider="fake",
+        )
+    )
+    url = await svc.generate_tts("开始本地测试。")
+
+    assert url is not None
+    assert url.startswith("/static/audio/tts_")
+    # Ensure file landed under the patched output dir.
+    filename = url.rsplit("/", 1)[-1]
+    assert (audio_dir / filename).is_file()
+    assert (audio_dir / filename).stat().st_size > 100

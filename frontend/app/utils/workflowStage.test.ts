@@ -1,0 +1,32 @@
+import { describe, expect, it } from "vitest";
+import {
+	isWorkflowStage,
+	resolveEventStage,
+	toSimplifiedStage,
+} from "./workflowStage";
+
+describe("workflowStage mapping", () => {
+	it("maps granular backend stages to simplified UI stages", () => {
+		expect(toSimplifiedStage("plan_outline")).toBe("plan");
+		expect(toSimplifiedStage("outline_approval")).toBe("plan_approval");
+		expect(toSimplifiedStage("plan_characters")).toBe("plan");
+		expect(toSimplifiedStage("render_shots")).toBe("render");
+		expect(toSimplifiedStage("compose_merge")).toBe("compose");
+		expect(toSimplifiedStage("add_audio")).toBe("compose");
+		expect(toSimplifiedStage("review")).toBe("review");
+	});
+
+	it("treats granular backend stage names as valid workflow stages", () => {
+		expect(isWorkflowStage("plan_outline")).toBe(true);
+		expect(isWorkflowStage("shot_images_approval")).toBe(true);
+		expect(isWorkflowStage("invalid_stage")).toBe(false);
+	});
+
+	it("resolves stage from either stage or current_stage fields", () => {
+		expect(resolveEventStage({ stage: "compose_videos" })).toBe("compose");
+		expect(resolveEventStage({ current_stage: "characters_approval" })).toBe(
+			"plan_approval",
+		);
+		expect(resolveEventStage({ stage: "nope" })).toBeUndefined();
+	});
+});

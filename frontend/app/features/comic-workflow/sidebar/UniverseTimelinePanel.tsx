@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GlobeAltIcon } from "@heroicons/react/24/outline";
 import { universesApi } from "~/services/api";
+import { EmptyState } from "~/components/ui/EmptyState";
 import { toast } from "~/utils/toast";
 
 interface UniverseTimelinePanelProps {
@@ -66,17 +67,23 @@ export function UniverseTimelinePanel({
 
 	if (isError || !data) {
 		return (
-			<div className="p-3 text-[length:var(--text-xs)] text-base-content/50">
-				无法加载宇宙时间线
-			</div>
+			<EmptyState
+				compact
+				title="无法加载时间线"
+				description="稍后重试，或检查宇宙是否仍可用"
+				className="h-full"
+			/>
 		);
 	}
 
 	return (
 		<div className="flex h-full min-h-0 flex-col" data-shell="universe-timeline">
 			<div className="shrink-0 border-b border-base-content/10 px-2 py-1.5">
-				<div className="flex items-center gap-1.5">
-					<GlobeAltIcon className="h-3.5 w-3.5 text-primary" />
+				<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/45">
+					universe
+				</p>
+				<div className="mt-0.5 flex items-center gap-1.5">
+					<GlobeAltIcon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
 					<h3 className="m-0 truncate font-heading text-[length:var(--text-sm)] font-bold">
 						{data.universe_name}
 					</h3>

@@ -10,7 +10,10 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/outline";
 import { TopBar } from "~/components/layout/TopBar";
+import { Button } from "~/components/ui/Button";
+import { EmptyState as SharedEmptyState } from "~/components/ui/EmptyState";
 import { PageBody, PageShell } from "~/components/layout/PageShell";
+import { PageContent, PageHeader } from "~/components/layout/PageHeader";
 import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import { projectsApi } from "~/services/api";
 import { cleanupDeletedProjectCaches } from "~/features/projects/deleteProject";
@@ -171,33 +174,28 @@ export function ProjectsPage() {
 		<PageShell className="text-base-content" data-shell="projects-list">
 			<TopBar />
 
-			<PageBody className="mx-auto flex w-full max-w-7xl flex-col gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)]">
-				<header className="flex flex-col gap-2 border-b border-base-content/10 pb-3 lg:flex-row lg:items-end lg:justify-between">
-					<div className="min-w-0">
-						<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/55">
-							project browser
-						</p>
-						<h1 className="m-0 mt-0.5 font-heading text-[length:var(--text-xl)] font-bold leading-tight">
-							项目
-						</h1>
-						<p className="m-0 mt-1 max-w-2xl text-[length:var(--text-sm)] text-base-content/65">
-							回到工作台，或清理草稿
-						</p>
-					</div>
-
-					<div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center">
-						<Metric label="全部" value={visibleProjects.length} />
-						<Metric label="成片" value={completedCount} />
-						<Metric label="已选" value={selectedCount} />
-						<Link
-							to="/"
-							className="btn-doodle touch-target-dense col-span-3 inline-flex h-9 min-h-9 items-center justify-center gap-1.5 bg-primary px-3 text-[length:var(--text-xs)] font-heading text-primary-content sm:col-span-1"
-						>
-							<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
-							新建
-						</Link>
-					</div>
-				</header>
+			<PageBody>
+				<PageContent width="wide">
+				<PageHeader
+					eyebrow="project browser"
+					title="项目"
+					description="回到工作台，或清理草稿"
+					actions={
+						<>
+							<div className="grid grid-cols-3 gap-1.5">
+								<Metric label="全部" value={visibleProjects.length} />
+								<Metric label="成片" value={completedCount} />
+								<Metric label="已选" value={selectedCount} />
+							</div>
+							<Link to="/">
+								<Button size="sm">
+									<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+									新建
+								</Button>
+							</Link>
+						</>
+					}
+				/>
 
 				<section
 					className="rounded-[var(--radius-lg)] border-2 border-base-content/15 bg-base-200/45"
@@ -265,6 +263,7 @@ export function ProjectsPage() {
 						</div>
 					)}
 				</section>
+				</PageContent>
 			</PageBody>
 
 			<ConfirmModal
@@ -401,25 +400,20 @@ function ErrorState() {
 
 function EmptyState() {
 	return (
-		<div className="flex min-h-[10rem] flex-col items-center justify-center gap-3 rounded-[var(--radius-lg)] border-2 border-dashed border-base-content/15 bg-base-200/35 px-3 text-center">
-			<span className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] bg-primary text-primary-content shadow-brutal-sm">
-				<DocumentTextIcon className="h-5 w-5" aria-hidden="true" />
-			</span>
-			<div>
-				<p className="m-0 font-heading text-[length:var(--text-lg)] font-bold">
-					暂无项目
-				</p>
-				<p className="m-0 mt-0.5 text-[length:var(--text-xs)] text-base-content/65">
-					开始创作你的第一个故事
-				</p>
-			</div>
-			<Link
-				to="/"
-				className="btn-doodle touch-target-dense inline-flex h-9 min-h-9 items-center justify-center gap-1.5 bg-primary px-3 text-[length:var(--text-xs)] font-heading text-primary-content"
-			>
-				<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
-				新建项目
-			</Link>
+		<div className="min-h-[10rem] rounded-[var(--radius-lg)] border-2 border-dashed border-base-content/15 bg-base-200/35">
+			<SharedEmptyState
+				icon={<DocumentTextIcon className="h-5 w-5" aria-hidden="true" />}
+				title="暂无项目"
+				description="开始创作你的第一个故事"
+				action={
+					<Link to="/">
+						<Button size="sm">
+							<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+							新建项目
+						</Button>
+					</Link>
+				}
+			/>
 		</div>
 	);
 }

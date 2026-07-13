@@ -1,177 +1,95 @@
 from __future__ import annotations
 
+import json
+import logging
 from typing import Any
 
 from sqlalchemy import select
 
 from app.agents.base import AgentContext, BaseAgent, TargetIds
+from app.agents.prompts.review import SYSTEM_PROMPT
+from app.agents.utils import extract_json
 from app.models.project import Character, Shot
 from app.services.creative_control import infer_feedback_targets
 
+logger = logging.getLogger(__name__)
+
 ALLOWED_START_AGENTS = {"outline", "plan", "render", "compose"}
 
-_FEEDBACK_TYPE_MAP = {
+# Legacy / verbose names that older prompts or models may still emit.
+_START_AGENT_ALIASES = {
     "outline": "outline",
-    "story_outline": "outline",
+    "outline_agent": "outline",
     "plan": "plan",
+    "scriptwriter": "plan",
     "story": "plan",
-    "script": "plan",
-    "global": "plan",
     "render": "render",
-    "character": "render",
-    "shot": "render",
-    "storyboard": "render",
+    "character_artist": "render",
+    "storyboard_artist": "render",
     "compose": "compose",
+    "video_generator": "compose",
+    "video_merger": "compose",
     "video": "compose",
-    "merge": "compose",
 }
 
-_RETRY_MERGE_KEYWORDS = (
-    "retry merge",
-    "重试合成",
-    "重新合成",
-    "重新拼接最终视频",
-    "重新合并最终视频",
-    "final-output",
-)
 
-
-def _is_retry_merge_feedback(feedback: str) -> bool:
-    normalized = feedback.strip().lower()
-    return any(keyword in normalized for keyword in _RETRY_MERGE_KEYWORDS)
-
-
-_FULL_RESTART_KEYWORDS = (
-    "重做",
-    "全部重新",
-    "推倒重来",
-    "从头开始",
-    "完全重新",
-    "redo all",
-    "restart from scratch",
-    "regenerate all",
-    "full restart",
-    "全部推翻",
-)
-
-
-def _is_full_restart_feedback(feedback: str) -> bool:
-    normalized = feedback.strip().lower()
-    return any(kw in normalized for kw in _FULL_RESTART_KEYWORDS)
-
-
-def _decide_mode(feedback_type: str, feedback: str) -> str:
-    if _is_full_restart_feedback(feedback):
-        return "full"
-    return "incremental"
-
-
-# Text / structure edits → replan the entity, then continue pipeline
-_PLAN_ENTITY_KEYWORDS = (
-    "对白",
-    "台词",
-    "旁白",
-    "改描述",
-    "改场景",
-    "改动作",
-    "改剧情",
-    "改设定",
-    "改人设",
-    "改名字",
-    "改名为",
-    "重写",
-    "改成",
-    "dialogue",
-    "description",
-    "rewrite",
-    "rename",
-    "change the line",
-    "change dialogue",
-    "change scene",
-    "change action",
-    "update description",
-)
-
-# Explicit video / motion intent
-_COMPOSE_ENTITY_KEYWORDS = (
-    "重做视频",
-    "重新生成视频",
-    "视频太",
-    "运镜",
-    "时长",
-    "动起来",
-    "动作幅度",
-    "redo video",
-    "regenerate video",
-    "camera move",
-    "motion",
-    "duration",
-)
-
-# Visual / still image intent
-_RENDER_ENTITY_KEYWORDS = (
-    "重画",
-    "重做图",
-    "重新画",
-    "画面",
-    "首帧",
-    "换色",
-    "颜色",
-    "光影",
-    "灯光",
-    "夜景",
-    "白天",
-    "风格",
-    "脸",
-    "发型",
-    "服装",
-    "redraw",
-    "recolor",
-    "lighting",
-    "night",
-    "daytime",
-    "outfit",
-    "face",
-    "hair",
-    "image",
-)
-
-
-def _feedback_mentions(feedback: str, keywords: tuple[str, ...]) -> bool:
-    text = feedback.strip().lower()
-    if not text:
-        return False
-    return any(kw.lower() in text for kw in keywords)
-
-
-def resolve_entity_start_agent(entity_type: str, feedback: str) -> str:
-    """Choose plan / render / compose for a selected entity based on feedback text."""
-    et = (entity_type or "").strip().lower()
-    if et == "video":
-        return "compose"
-    if _feedback_mentions(feedback, _PLAN_ENTITY_KEYWORDS):
+def normalize_start_agent(value: Any) -> str:
+    if not isinstance(value, str):
         return "plan"
-    if _feedback_mentions(feedback, _COMPOSE_ENTITY_KEYWORDS):
-        return "compose"
-    if _feedback_mentions(feedback, _RENDER_ENTITY_KEYWORDS):
-        return "render"
-    # Default: still-image re-render is the most common selection action
-    if et in {"character", "shot"}:
-        return "render"
+    key = value.strip().lower()
+    if not key:
+        return "plan"
+    mapped = _START_AGENT_ALIASES.get(key, key)
+    if mapped in ALLOWED_START_AGENTS:
+        return mapped
     return "plan"
 
 
-def _entity_target_ids(entity_type: str, entity_id: int) -> TargetIds:
-    """Build explicit target set for a canvas-selected entity."""
+def normalize_mode(value: Any, *, default: str = "incremental") -> str:
+    if isinstance(value, str) and value.strip().lower() in {"incremental", "full"}:
+        return value.strip().lower()
+    return default
+
+
+def _entity_target_ids(entity_type: str, entity_ids: list[int]) -> TargetIds:
     if entity_type == "character":
-        return TargetIds(character_ids=[entity_id], shot_ids=[])
+        return TargetIds(character_ids=list(entity_ids), shot_ids=[])
     if entity_type in {"shot", "video"}:
-        return TargetIds(character_ids=[], shot_ids=[entity_id])
+        return TargetIds(character_ids=[], shot_ids=list(entity_ids))
     return TargetIds()
 
 
+def _selected_entity_ids(ctx: AgentContext) -> list[int]:
+    multi_ids = [
+        int(i)
+        for i in (getattr(ctx, "entity_ids", None) or [])
+        if isinstance(i, int) or (isinstance(i, str) and str(i).isdigit())
+    ]
+    if ctx.entity_id is not None and ctx.entity_id not in multi_ids:
+        multi_ids = [ctx.entity_id, *multi_ids]
+    return list(dict.fromkeys(multi_ids))
+
+
+def _target_ids_from_data(data: dict[str, Any]) -> TargetIds | None:
+    raw = data.get("target_ids")
+    if not isinstance(raw, dict):
+        return None
+    character_ids = [
+        int(v)
+        for v in (raw.get("character_ids") or [])
+        if isinstance(v, int) or (isinstance(v, str) and str(v).isdigit())
+    ]
+    shot_ids = [
+        int(v)
+        for v in (raw.get("shot_ids") or [])
+        if isinstance(v, int) or (isinstance(v, str) and str(v).isdigit())
+    ]
+    if not character_ids and not shot_ids:
+        return None
+    return TargetIds(character_ids=character_ids, shot_ids=shot_ids)
+
+
 async def _project_entity_state(ctx: AgentContext) -> dict[str, Any]:
-    """Load cast + shots so free-text feedback can resolve concrete targets."""
     project_id = getattr(ctx.project, "id", None)
     if project_id is None:
         return {"project_id": None, "characters": [], "shots": []}
@@ -183,19 +101,47 @@ async def _project_entity_state(ctx: AgentContext) -> dict[str, Any]:
         select(Shot).where(Shot.project_id == project_id).order_by(Shot.order.asc())
     )
     characters = [
-        {"id": c.id, "name": c.name}
+        {
+            "id": c.id,
+            "name": c.name,
+            "description": c.description,
+            "image_url": c.image_url,
+        }
         for c in char_res.scalars().all()
         if c.id is not None
     ]
     shots = [
-        {"id": s.id, "order": s.order}
+        {
+            "id": s.id,
+            "order": s.order,
+            "description": s.description,
+            "prompt": s.prompt,
+            "image_prompt": s.image_prompt,
+            "image_url": s.image_url,
+            "video_url": s.video_url,
+            "duration": s.duration,
+        }
         for s in shot_res.scalars().all()
         if s.id is not None
     ]
     return {"project_id": project_id, "characters": characters, "shots": shots}
 
 
-class ReviewRuleEngine(BaseAgent):
+def _apply_focus_prefix(ctx: AgentContext, entity_type: str | None, entity_ids: list[int]) -> None:
+    feedback = (ctx.user_feedback or "").strip()
+    if not feedback or not entity_type or not entity_ids:
+        return
+    if feedback.startswith("[focus:"):
+        return
+    focus_ids = ",".join(str(i) for i in entity_ids)
+    ctx.user_feedback = f"[focus:{entity_type}:{focus_ids}] {feedback}"
+    if ctx.entity_id is None:
+        ctx.entity_id = entity_ids[0]
+
+
+class ReviewAgent(BaseAgent):
+    """Route user feedback to the correct regeneration stage via LLM."""
+
     name = "review"
 
     async def run(self, ctx: AgentContext) -> Any:
@@ -212,107 +158,83 @@ class ReviewRuleEngine(BaseAgent):
                 "target_ids": None,
             }
 
-        multi_ids = [
-            int(i)
-            for i in (getattr(ctx, "entity_ids", None) or [])
-            if isinstance(i, int) or (isinstance(i, str) and str(i).isdigit())
-        ]
-        if ctx.entity_id is not None and ctx.entity_id not in multi_ids:
-            multi_ids = [ctx.entity_id, *multi_ids]
-        multi_ids = list(dict.fromkeys(multi_ids))
-
-        if ctx.entity_type and multi_ids:
-            start_agent = resolve_entity_start_agent(ctx.entity_type, feedback)
-            mode = "incremental"
-            if _is_full_restart_feedback(feedback):
-                mode = "full"
-            if ctx.entity_type == "character":
-                target_ids = TargetIds(character_ids=multi_ids, shot_ids=[])
-                entity_desc = (
-                    f"角色#{multi_ids[0]}"
-                    if len(multi_ids) == 1
-                    else f"{len(multi_ids)} 个角色"
-                )
-            elif ctx.entity_type in {"shot", "video"}:
-                target_ids = TargetIds(character_ids=[], shot_ids=multi_ids)
-                entity_desc = (
-                    f"格/分镜#{multi_ids[0]}"
-                    if len(multi_ids) == 1
-                    else f"{len(multi_ids)} 个分镜格"
-                )
-            else:
-                target_ids = _entity_target_ids(ctx.entity_type, multi_ids[0])
-                entity_desc = f"{ctx.entity_type}#{multi_ids[0]}"
-
-            stage_label = {
-                "plan": "规划文案",
-                "render": "重绘画面",
-                "compose": "重做视频",
-            }.get(start_agent, start_agent)
-            await self.send_message(
-                ctx,
-                f"将对{entity_desc}进行增量更新（{stage_label}）。",
-                summary=f"更新{entity_desc}",
-            )
-            # Help plan/render agents know which entity the user selected
-            focus_ids = ",".join(str(i) for i in multi_ids)
-            focus_prefix = f"[focus:{ctx.entity_type}:{focus_ids}] "
-            if not feedback.startswith("[focus:"):
-                ctx.user_feedback = f"{focus_prefix}{feedback}"
-            if ctx.entity_id is None:
-                ctx.entity_id = multi_ids[0]
-            return {
-                "start_agent": start_agent,
-                "mode": mode,
-                "reason": (
-                    f"per-entity: {ctx.entity_type}#"
-                    f"{focus_ids} → {start_agent}"
-                ),
-                "target_ids": target_ids,
-            }
-
-        retry_merge_requested = _is_retry_merge_feedback(feedback)
-
-        feedback_type = ctx.feedback_type or "plan"
-        start_agent = _FEEDBACK_TYPE_MAP.get(feedback_type, "plan")
-
-        mode = _decide_mode(feedback_type, feedback)
-
+        multi_ids = _selected_entity_ids(ctx)
         entity_state = await _project_entity_state(ctx)
-        target_ids = infer_feedback_targets(
-            {
-                "routing": {"start_agent": start_agent, "mode": mode},
-                "feedback": feedback,
+
+        payload: dict[str, Any] = {
+            "feedback": feedback,
+            "feedback_type": ctx.feedback_type,
+            "entity_type": ctx.entity_type,
+            "entity_id": ctx.entity_id,
+            "entity_ids": multi_ids,
+            "state": {
+                "project": {
+                    "id": ctx.project.id,
+                    "title": ctx.project.title,
+                    "story": ctx.project.story,
+                    "style": ctx.project.style,
+                    "status": ctx.project.status,
+                    "video_url": getattr(ctx.project, "video_url", None),
+                },
+                "characters": entity_state["characters"],
+                "shots": entity_state["shots"],
             },
-            entity_state,
+        }
+
+        await self.send_message(ctx, "正在分析反馈并决定重跑阶段...", is_loading=True)
+        try:
+            resp = await self.call_llm(
+                ctx,
+                system_prompt=SYSTEM_PROMPT,
+                user_prompt=json.dumps(payload, ensure_ascii=False),
+                max_tokens=1024,
+            )
+            data = extract_json(resp.text)
+        except Exception as exc:
+            logger.warning("ReviewAgent LLM routing failed, falling back to plan: %s", exc)
+            data = {}
+
+        routing = data.get("routing") if isinstance(data.get("routing"), dict) else {}
+        start_agent = normalize_start_agent(
+            routing.get("start_agent") if routing else data.get("start_agent")
         )
+        mode = normalize_mode(
+            routing.get("mode") if routing else data.get("mode"),
+            default="incremental",
+        )
+        reason = ""
+        if isinstance(routing.get("reason"), str):
+            reason = routing["reason"].strip()
+        elif isinstance(data.get("reason"), str):
+            reason = data["reason"].strip()
 
-        # Free-text that hits a concrete entity defaults to incremental partial re-run
-        if target_ids and target_ids.has_targets() and mode != "full":
-            mode = "incremental"
-            if not ctx.entity_type:
-                if target_ids.shot_ids and not target_ids.character_ids:
-                    ctx.entity_type = "shot"
-                    ctx.entity_id = target_ids.shot_ids[0]
-                    ctx.entity_ids = list(target_ids.shot_ids)
-                    start_agent = resolve_entity_start_agent("shot", feedback)
-                elif target_ids.character_ids and not target_ids.shot_ids:
-                    ctx.entity_type = "character"
-                    ctx.entity_id = target_ids.character_ids[0]
-                    ctx.entity_ids = list(target_ids.character_ids)
-                    start_agent = resolve_entity_start_agent("character", feedback)
+        target_ids = _target_ids_from_data(data)
+        if target_ids is None:
+            target_ids = infer_feedback_targets(
+                {
+                    "routing": {"start_agent": start_agent, "mode": mode},
+                    "feedback": feedback,
+                    "analysis": data.get("analysis"),
+                    "target_ids": data.get("target_ids"),
+                },
+                entity_state,
+            )
 
-        if retry_merge_requested:
-            start_agent = "compose"
-            mode = "incremental"
-
-        if start_agent not in ALLOWED_START_AGENTS:
-            start_agent = "plan"
-
-        # Non-empty feedback without full-restart keywords stays incremental
-        # so we don't wipe the whole project on a soft tweak.
-        if mode == "full" and not _is_full_restart_feedback(feedback) and feedback:
-            mode = "incremental"
+        # Canvas selection is authoritative when LLM omitted targets.
+        if ctx.entity_type and multi_ids:
+            selected = _entity_target_ids(ctx.entity_type, multi_ids)
+            if target_ids is None or not target_ids.has_targets():
+                target_ids = selected
+            _apply_focus_prefix(ctx, ctx.entity_type, multi_ids)
+        elif target_ids and target_ids.has_targets() and not ctx.entity_type:
+            if target_ids.shot_ids and not target_ids.character_ids:
+                ctx.entity_type = "shot"
+                ctx.entity_id = target_ids.shot_ids[0]
+                ctx.entity_ids = list(target_ids.shot_ids)
+            elif target_ids.character_ids and not target_ids.shot_ids:
+                ctx.entity_type = "character"
+                ctx.entity_id = target_ids.character_ids[0]
+                ctx.entity_ids = list(target_ids.character_ids)
 
         mode_desc = "增量更新" if mode == "incremental" else "重新生成"
         target_info = ""
@@ -333,6 +255,10 @@ class ReviewRuleEngine(BaseAgent):
         return {
             "start_agent": start_agent,
             "mode": mode,
-            "reason": f"feedback_type={feedback_type}",
+            "reason": reason or f"llm_route:{start_agent}:{mode}",
             "target_ids": target_ids,
         }
+
+
+# Backward-compatible alias used by older imports/tests.
+ReviewRuleEngine = ReviewAgent

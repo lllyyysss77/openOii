@@ -139,3 +139,55 @@ async def test_compose_character_reference_image_uses_min_target_height_when_zer
     image = Image.open(io.BytesIO(result))
 
     assert image.height >= 1
+
+
+def test_build_nine_grid_urls_layout_and_fallback():
+    composer = ImageComposer()
+    urls = composer._build_nine_grid_urls(
+        current_image_url="cur.png",
+        previous_image_url="prev.png",
+        next_image_url=None,
+        character_image_urls=["c0.png", "c1.png"],
+    )
+
+    assert len(urls) == 9
+    assert urls[0] == "prev.png"
+    assert urls[1] == "cur.png"
+    assert urls[2] == "cur.png"  # next fallback
+    assert urls[3] == "c0.png"
+    assert urls[4] == "c1.png"
+    assert urls[5] == "c0.png"  # cycle
+    assert urls[8] == "cur.png"
+
+
+@pytest.mark.asyncio
+async def test_compose_nine_grid_reference_image_is_3x3(monkeypatch):
+    composer = ImageComposer(max_width=1600, max_height=1600)
+    colors = {
+        "cur.png": (255, 0, 0),
+        "prev.png": (0, 255, 0),
+        "next.png": (0, 0, 255),
+        "c0.png": (255, 255, 0),
+    }
+
+    async def fake_download(url: str):
+        return _make_image(400, 300, colors.get(url, (128, 128, 128)))
+
+    monkeypatch.setattr(composer, "_download_image", fake_download)
+
+    result = await composer.compose_nine_grid_reference_image(
+        current_image_url="cur.png",
+        previous_image_url="prev.png",
+        next_image_url="next.png",
+        character_image_urls=["c0.png"],
+        cell_size=200,
+        gap=10,
+    )
+    image = Image.open(io.BytesIO(result))
+
+    assert image.size == (200 * 3 + 10 * 2, 200 * 3 + 10 * 2)
+    # center-top cell (current) should contain red-dominant pixels
+    center_x = 200 + 10 + 100
+    center_y = 100
+    pixel = image.getpixel((center_x, center_y))
+    assert pixel[0] > 200 and pixel[1] < 50 and pixel[2] < 50

@@ -1,16 +1,5 @@
 import type { WorkflowStage } from "~/types";
 
-const WORKFLOW_STAGE_SEQUENCE: WorkflowStage[] = [
-	"plan",
-	"plan_approval",
-	"render",
-	"render_approval",
-	"compose",
-	"review",
-];
-
-const WORKFLOW_STAGE_SET = new Set<WorkflowStage>(WORKFLOW_STAGE_SEQUENCE);
-
 const WORKFLOW_STAGE_UNLOCK_RANK: Record<WorkflowStage, number> = {
 	plan: 0,
 	plan_approval: 0,
@@ -59,15 +48,13 @@ const GRANULAR_TO_SIMPLIFIED: Record<string, WorkflowStage> = {
  * to the simplified WorkflowStage used by the UI.  Returns `undefined`
  * for completely unknown values.
  */
-function toSimplifiedStage(value: unknown): WorkflowStage | undefined {
+export function toSimplifiedStage(value: unknown): WorkflowStage | undefined {
 	if (typeof value !== "string") return undefined;
 	return GRANULAR_TO_SIMPLIFIED[value];
 }
 
 export function isWorkflowStage(value: unknown): value is WorkflowStage {
-	return (
-		typeof value === "string" && WORKFLOW_STAGE_SET.has(value as WorkflowStage)
-	);
+	return toSimplifiedStage(value) !== undefined;
 }
 
 /**

@@ -10,8 +10,9 @@ import { ConfirmModal } from "~/components/ui/ConfirmModal";
 import { GlobeAltIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { toast } from "~/utils/toast";
 import type { Universe } from "~/types";
-import { Link } from "react-router-dom";
 import { PageBody, PageShell } from "~/components/layout/PageShell";
+import { PageContent, PageHeader } from "~/components/layout/PageHeader";
+import { TopBar } from "~/components/layout/TopBar";
 
 export function UniversesPage() {
 	const queryClient = useQueryClient();
@@ -78,44 +79,23 @@ export function UniversesPage() {
 
 	return (
 		<PageShell data-shell="universes-list">
-			<header className="chrome-row z-[var(--z-fixed)] gap-2 border-b border-base-content/12 bg-base-200 px-2 sm:px-3">
-				<div className="flex-1">
-					<Link to="/" className="btn btn-ghost btn-sm touch-target-dense h-8 min-h-8">
-						← 返回首页
-					</Link>
-				</div>
-				<div className="font-comic text-base font-bold tracking-wider text-base-content">
-					<span className="inline-flex items-center gap-1.5">
-						<GlobeAltIcon className="h-4 w-4" aria-hidden="true" />
-						IP 宇宙
-					</span>
-				</div>
-				<div className="flex flex-1 justify-end">
-					<Button
-						size="sm"
-						className="h-8 min-h-8 gap-1 px-2"
-						onClick={() => setShowCreate(true)}
-					>
-						<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
-						创建
-					</Button>
-				</div>
-			</header>
+			<TopBar />
 
-			<PageBody className="mx-auto w-full max-w-6xl px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)]">
-				<div className="mb-3 flex items-end justify-between gap-2">
-					<div className="min-w-0">
-						<h1 className="m-0 font-heading text-[length:var(--text-xl)] font-bold leading-tight">
-							IP 宇宙
-						</h1>
-						<p className="m-0 mt-0.5 text-[length:var(--text-sm)] text-base-content/60">
-							跨项目世界观与角色库
-						</p>
-					</div>
-					<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/40">
-						{isLoading ? "…" : `${universes.length} 个`}
-					</span>
-				</div>
+			<PageBody>
+				<PageContent>
+				<PageHeader
+					eyebrow="universe browser"
+					title="IP 宇宙"
+					description="跨项目世界观与角色库"
+					meta={isLoading ? "…" : `${universes.length} 个`}
+					actions={
+						<Button size="sm" onClick={() => setShowCreate(true)}>
+							<PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+							创建
+						</Button>
+					}
+				/>
+
 
 				{isLoading && (
 					<div className="flex items-center justify-center py-12">
@@ -152,6 +132,7 @@ export function UniversesPage() {
 						))}
 					</div>
 				)}
+				</PageContent>
 			</PageBody>
 
 			{/* Create modal */}

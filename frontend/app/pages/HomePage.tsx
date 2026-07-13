@@ -7,11 +7,11 @@ import { Card } from "~/components/ui/Card";
 import {
 	ChevronDownIcon,
 	ChevronUpIcon,
-	GlobeAltIcon,
 	PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { TopBar } from "~/components/layout/TopBar";
 import { PageBody, PageShell } from "~/components/layout/PageShell";
+import { PageContent } from "~/components/layout/PageHeader";
 import { SkillWall } from "~/components/home/SkillWall";
 import { SvgIcon } from "~/components/ui/SvgIcon";
 import type { SkillPreset } from "~/features/skills/skillCatalog";
@@ -320,10 +320,21 @@ export function HomePage() {
 					/>
 				</Suspense>
 			)}
-			<PageBody className="workbench-surface px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)] sm:py-[var(--space-4)]">
-				<div className="mx-auto flex w-full max-w-6xl flex-col gap-[var(--space-3)]">
-					<header className="flex flex-wrap items-center justify-end gap-2">
-						<nav className="flex flex-wrap gap-1" aria-label="首页入口">
+			<PageBody className="workbench-surface">
+				<PageContent className="sm:py-[var(--space-4)]">
+					<div className="flex flex-wrap items-center justify-between gap-2">
+						<div className="min-w-0">
+							<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/55">
+								create desk
+							</p>
+							<h1 className="m-0 mt-0.5 font-heading text-[length:var(--text-xl)] font-bold leading-tight">
+								创作台
+							</h1>
+							<p className="m-0 mt-1 text-[length:var(--text-sm)] text-base-content/65">
+								选工作流，写一句话开工
+							</p>
+						</div>
+						<div className="flex flex-wrap gap-1" aria-label="创作台工具">
 							<button
 								type="button"
 								className={`${navChip} ${
@@ -333,7 +344,7 @@ export function HomePage() {
 								aria-pressed={historyOpen}
 							>
 								<SvgIcon name="clock-3" size={14} />
-								项目
+								历史
 							</button>
 							<button
 								type="button"
@@ -346,15 +357,8 @@ export function HomePage() {
 								<SvgIcon name="archive" size={14} />
 								资产
 							</button>
-							<Link
-								to="/universes"
-								className={`${navChip} text-base-content/65`}
-							>
-								<GlobeAltIcon className="h-3.5 w-3.5" aria-hidden="true" />
-								宇宙
-							</Link>
-						</nav>
-					</header>
+						</div>
+					</div>
 
 					<Card
 						className="card-comic animate-draw-in w-full overflow-hidden !p-0"
@@ -362,11 +366,11 @@ export function HomePage() {
 					>
 						<div className="flex flex-wrap items-center justify-between gap-2 border-b border-base-content/10 bg-base-200/30 px-[var(--space-3)] py-1.5">
 							<div className="min-w-0">
-								<h1 className="m-0 font-heading text-[length:var(--text-md)] font-bold">
-									创作台
-								</h1>
-								<p className="m-0 text-[length:var(--text-2xs)] text-base-content/50">
-									选工作流，写一句话开工
+								<h2 className="m-0 font-heading text-[length:var(--text-md)] font-bold">
+										开工配置
+									</h2>
+									<p className="m-0 text-[length:var(--text-2xs)] text-base-content/50">
+										技能、风格与分镜参数
 								</p>
 							</div>
 							{activeSkillId ? (
@@ -742,7 +746,7 @@ export function HomePage() {
 							</aside>
 						</div>
 					</Card>
-				</div>
+				</PageContent>
 			</PageBody>
 			</div>
 		</PageShell>

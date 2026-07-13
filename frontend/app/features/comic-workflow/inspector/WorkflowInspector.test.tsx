@@ -58,7 +58,8 @@ describe("WorkflowInspector", () => {
 			/>,
 		);
 
-		expect(screen.getByText("选择画布卡片查看细节")).toBeInTheDocument();
+		expect(screen.getByText("选择画布卡片")).toBeInTheDocument();
+		expect(screen.getByText("可多选分镜格 · 批量重做本格")).toBeInTheDocument();
 	});
 
 	it("locks write actions while generation is active", async () => {

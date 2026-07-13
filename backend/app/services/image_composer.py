@@ -160,6 +160,145 @@ class ImageComposer:
         # 返回 URL
         return f"/static/images/{filename}"
 
+    def _fit_into_cell(
+        self,
+        img: Image.Image,
+        cell_size: int,
+        *,
+        bg: tuple[int, int, int] = (24, 24, 27),
+    ) -> Image.Image:
+        """Letterbox an image into a square cell."""
+        cell = Image.new("RGB", (cell_size, cell_size), color=bg)
+        fitted = self._resize_to_fit(img, cell_size, cell_size)
+        x = (cell_size - fitted.width) // 2
+        y = (cell_size - fitted.height) // 2
+        cell.paste(fitted, (x, y))
+        return cell
+
+    def _build_nine_grid_urls(
+        self,
+        *,
+        current_image_url: str,
+        previous_image_url: str | None = None,
+        next_image_url: str | None = None,
+        character_image_urls: list[str] | None = None,
+    ) -> list[str]:
+        """Fill a 3×3 board for I2V consistency.
+
+        Layout (reading order):
+        [prev] [current] [next]
+        [char0] [char1] [char2]
+        [char3] [char4] [current]
+
+        Missing neighbors fall back to current. Character slots cycle available
+        character refs, then current, so the board is never empty.
+        """
+        current = current_image_url
+        prev = previous_image_url or current
+        nxt = next_image_url or current
+        chars = [url for url in (character_image_urls or []) if url]
+
+        def char_at(i: int) -> str:
+            if chars:
+                return chars[i % len(chars)]
+            return current
+
+        return [
+            prev,
+            current,
+            nxt,
+            char_at(0),
+            char_at(1),
+            char_at(2),
+            char_at(3),
+            char_at(4),
+            current,
+        ]
+
+    async def compose_nine_grid_reference_image(
+        self,
+        *,
+        current_image_url: str,
+        previous_image_url: str | None = None,
+        next_image_url: str | None = None,
+        character_image_urls: list[str] | None = None,
+        cell_size: int = 512,
+        gap: int = 8,
+        bg: tuple[int, int, int] = (18, 18, 20),
+    ) -> bytes:
+        """Compose a 3×3 storyboard reference board for video generation.
+
+        Center/top-middle is the current first frame; neighbors + character
+        panels surround it so I2V models can lock identity and continuity.
+        """
+        if not current_image_url:
+            raise ValueError("current_image_url is required for nine-grid reference")
+
+        cell_size = max(128, int(cell_size))
+        gap = max(0, int(gap))
+        urls = self._build_nine_grid_urls(
+            current_image_url=current_image_url,
+            previous_image_url=previous_image_url,
+            next_image_url=next_image_url,
+            character_image_urls=character_image_urls,
+        )
+
+        cells: list[Image.Image] = []
+        for url in urls:
+            try:
+                img = await self._download_image(url)
+            except Exception:
+                # Hard fallback: solid cell keeps board geometry stable.
+                img = Image.new("RGB", (cell_size, cell_size), color=(40, 40, 48))
+            cells.append(self._fit_into_cell(img, cell_size))
+
+        board_w = cell_size * 3 + gap * 2
+        board_h = cell_size * 3 + gap * 2
+        # Keep under configured max dimensions while preserving square cells.
+        max_side = max(1, min(self.max_width, self.max_height))
+        if board_w > max_side:
+            scale = max_side / board_w
+            cell_size = max(64, int(cell_size * scale))
+            gap = max(0, int(gap * scale))
+            cells = [self._fit_into_cell(c, cell_size) for c in cells]
+            board_w = cell_size * 3 + gap * 2
+            board_h = cell_size * 3 + gap * 2
+
+        canvas = Image.new("RGB", (board_w, board_h), color=bg)
+        for idx, cell in enumerate(cells):
+            row, col = divmod(idx, 3)
+            x = col * (cell_size + gap)
+            y = row * (cell_size + gap)
+            canvas.paste(cell, (x, y))
+
+        buffer = io.BytesIO()
+        canvas.save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    async def compose_and_save_nine_grid_reference_image(
+        self,
+        *,
+        current_image_url: str,
+        previous_image_url: str | None = None,
+        next_image_url: str | None = None,
+        character_image_urls: list[str] | None = None,
+    ) -> str:
+        """Compose 3×3 reference board and save to /static/images."""
+        image_bytes = await self.compose_nine_grid_reference_image(
+            current_image_url=current_image_url,
+            previous_image_url=previous_image_url,
+            next_image_url=next_image_url,
+            character_image_urls=character_image_urls,
+        )
+        filename = f"nine_grid_{uuid4().hex}.png"
+        images_dir = STATIC_DIR / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        file_path = images_dir / filename
+        with open(file_path, "wb") as f:
+            f.write(image_bytes)
+        logger.info("Saved nine-grid reference image to %s", file_path)
+        return f"/static/images/{filename}"
+
     async def compose_character_reference_image(
         self,
         character_image_urls: list[str],

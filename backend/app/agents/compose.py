@@ -74,12 +74,102 @@ class ComposeAgent(BaseAgent):
             "replace a clear character shot with a wide establishing shot. Do not redesign "
             "characters or change their face, hair, outfit, accessories, or color palette."
         )
-        if image_mode == "reference":
+        if image_mode == "nine_grid":
+            guidance += (
+                " The reference is a 3x3 storyboard board: top-middle and bottom-right are the "
+                "current shot first frame; top-left/top-right are previous/next continuity frames; "
+                "middle and bottom rows are character identity panels. Animate ONLY from the "
+                "current shot first frame. Use neighbor frames for motion continuity and character "
+                "panels only to lock identity. Do not pan across the whole grid or invent a "
+                "montage of all nine cells."
+            )
+        elif image_mode == "reference":
             guidance += (
                 " If the reference image contains a scene frame plus character panels, animate "
                 "the scene frame and use the character panels only to preserve identity."
             )
         return f"{guidance} {prompt}"
+
+    async def _neighbor_shot_images(
+        self,
+        ctx: AgentContext,
+        shot: Shot,
+    ) -> tuple[str | None, str | None]:
+        """Return previous/next shot image URLs by storyboard order."""
+        res = await ctx.session.execute(
+            select(Shot)
+            .where(Shot.project_id == ctx.project.id)
+            .order_by(Shot.order.asc(), Shot.id.asc())
+        )
+        ordered = list(res.scalars().all())
+        idx = next((i for i, item in enumerate(ordered) if item.id == shot.id), None)
+        if idx is None:
+            return None, None
+        prev_url = ordered[idx - 1].image_url if idx > 0 else None
+        next_url = ordered[idx + 1].image_url if idx + 1 < len(ordered) else None
+        return prev_url, next_url
+
+    async def _compose_i2v_reference(
+        self,
+        ctx: AgentContext,
+        shot: Shot,
+        characters: list[Character],
+        *,
+        as_url: bool,
+    ) -> tuple[str | None, bytes | None, str]:
+        """Build I2V reference image.
+
+        Prefers 3×3 nine-grid board for continuity + identity. Falls back to
+        legacy first_frame / reference strip when nine-grid fails.
+        """
+        if not shot.image_url:
+            return None, None, "none"
+
+        char_image_urls = [c.image_url for c in characters if c.image_url]
+        prev_url, next_url = await self._neighbor_shot_images(ctx, shot)
+        try:
+            if as_url:
+                url = await self.image_composer.compose_and_save_nine_grid_reference_image(
+                    current_image_url=shot.image_url,
+                    previous_image_url=prev_url,
+                    next_image_url=next_url,
+                    character_image_urls=char_image_urls,
+                )
+                return url, None, "nine_grid"
+            data = await self.image_composer.compose_nine_grid_reference_image(
+                current_image_url=shot.image_url,
+                previous_image_url=prev_url,
+                next_image_url=next_url,
+                character_image_urls=char_image_urls,
+            )
+            return None, data, "nine_grid"
+        except Exception as exc:
+            logger.warning("Nine-grid I2V reference failed for shot %s: %s", shot.id, exc)
+
+        image_mode = (ctx.settings.video_image_mode or "first_frame").strip().lower()
+        try:
+            if as_url:
+                if image_mode == "reference":
+                    url = await self.image_composer.compose_and_save_reference_image(
+                        shot_image_url=shot.image_url,
+                        character_image_urls=char_image_urls,
+                    )
+                    return url, None, "reference"
+                return shot.image_url, None, "first_frame"
+            if image_mode == "reference":
+                data = await self.image_composer.compose_reference_image(
+                    shot_image_url=shot.image_url,
+                    character_image_urls=char_image_urls,
+                )
+            else:
+                data = await self.image_composer.compose_reference_image(
+                    shot_image_url=shot.image_url,
+                    character_image_urls=[],
+                )
+            return None, data, image_mode if image_mode in {"reference", "first_frame"} else "first_frame"
+        except Exception as exc:
+            logger.warning("Legacy I2V reference failed for shot %s: %s", shot.id, exc)
+            return (shot.image_url if as_url else None), None, "first_frame"
 
     def _get_duration(self, shot: Shot, default_duration: float) -> float:
         if shot.duration and shot.duration > 0:
@@ -160,34 +250,27 @@ class ComposeAgent(BaseAgent):
                     session=ctx.session,
                     user_feedback=entity_fb,
                 )
-                if use_image_mode and shot.image_url:
-                    video_prompt = self._build_i2v_prompt(video_prompt, image_mode=image_mode)
-
-                # Thinking: reasoning for each video
-                await self.send_thinking(
-                    ctx,
-                    phase="reasoning",
-                    content=f"分镜 #{shot.order} 视频提示词：{video_prompt[:80]}...",
-                )
-
+                i2v_mode = image_mode
                 duration = self._get_duration(shot, default_duration)
 
                 if is_doubao:
                     image_url: str | None = None
                     if use_image_mode and shot.image_url:
-                        if image_mode == "reference":
-                            try:
-                                char_image_urls = [c.image_url for c in characters if c.image_url]
-                                image_url = (
-                                    await self.image_composer.compose_and_save_reference_image(
-                                        shot_image_url=shot.image_url,
-                                        character_image_urls=char_image_urls,
-                                    )
-                                )
-                            except Exception:
-                                image_url = shot.image_url
-                        else:
-                            image_url = shot.image_url
+                        image_url, _, i2v_mode = await self._compose_i2v_reference(
+                            ctx, shot, characters, as_url=True
+                        )
+                        video_prompt = self._build_i2v_prompt(
+                            video_prompt, image_mode=i2v_mode
+                        )
+
+                    await self.send_thinking(
+                        ctx,
+                        phase="reasoning",
+                        content=(
+                            f"分镜 #{shot.order} 视频提示词：{video_prompt[:80]}..."
+                            f"（I2V参考={i2v_mode if use_image_mode else 'off'}）"
+                        ),
+                    )
 
                     video_url = await ctx.video.generate_url(
                         prompt=video_prompt,
@@ -199,24 +282,21 @@ class ComposeAgent(BaseAgent):
                 else:
                     reference_image_bytes: bytes | None = None
                     if use_image_mode and shot.image_url:
-                        try:
-                            if image_mode == "reference":
-                                char_image_urls = [c.image_url for c in characters if c.image_url]
-                                reference_image_bytes = (
-                                    await self.image_composer.compose_reference_image(
-                                        shot_image_url=shot.image_url,
-                                        character_image_urls=char_image_urls,
-                                    )
-                                )
-                            else:
-                                reference_image_bytes = (
-                                    await self.image_composer.compose_reference_image(
-                                        shot_image_url=shot.image_url,
-                                        character_image_urls=[],
-                                    )
-                                )
-                        except Exception:
-                            reference_image_bytes = None
+                        _, reference_image_bytes, i2v_mode = await self._compose_i2v_reference(
+                            ctx, shot, characters, as_url=False
+                        )
+                        video_prompt = self._build_i2v_prompt(
+                            video_prompt, image_mode=i2v_mode
+                        )
+
+                    await self.send_thinking(
+                        ctx,
+                        phase="reasoning",
+                        content=(
+                            f"分镜 #{shot.order} 视频提示词：{video_prompt[:80]}..."
+                            f"（I2V参考={i2v_mode if use_image_mode else 'off'}）"
+                        ),
+                    )
 
                     video_url = await ctx.video.generate_url(
                         prompt=video_prompt,

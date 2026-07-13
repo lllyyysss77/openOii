@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { ChatPanel } from "~/components/chat/ChatPanel";
 import { Button } from "~/components/ui/Button";
+import { EmptyState } from "~/components/ui/EmptyState";
 import { SvgIcon, type IconName } from "~/components/ui/SvgIcon";
 import { assetsApi, getStaticUrl } from "~/services/api";
 import type { Asset } from "~/types";
@@ -299,30 +300,40 @@ function AssetsPanel({ projectId, active }: { projectId: number; active: boolean
 	const items = data?.items ?? [];
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
-			<div className="border-b border-base-content/10 p-3">
-				<div className="mb-2 flex items-center justify-between gap-2">
-					<h2 className="m-0 font-heading text-base font-bold">资产库</h2>
-					<span className="badge badge-ghost badge-sm">{data?.total ?? 0}</span>
+		<div className="flex h-full min-h-0 flex-col" data-shell="asset-panel">
+			<div className="border-b border-base-content/10 px-2 py-1.5">
+				<div className="mb-1.5 flex items-center justify-between gap-2">
+					<div className="min-w-0">
+						<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/45">
+							assets
+						</p>
+						<h2 className="m-0 font-heading text-[length:var(--text-sm)] font-bold">
+							资产库
+						</h2>
+					</div>
+					<span className="rounded-full border border-base-content/12 bg-base-200 px-2 py-0.5 font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/60">
+						{data?.total ?? 0}
+					</span>
 				</div>
 				<input
 					id="workspace-asset-search"
 					name="assetSearch"
-					className="input input-bordered input-sm w-full bg-base-100"
+					className="input input-bordered input-sm h-8 min-h-8 w-full bg-base-100 text-[length:var(--text-xs)]"
 					placeholder="搜索资产"
 					value={search}
 					onChange={(event) => setSearch(event.target.value)}
 				/>
-				<div className="mt-2 grid grid-cols-3 gap-1">
+				<div className="mt-1.5 grid grid-cols-3 gap-0.5">
 					{(["all", "character", "scene"] as const).map((type) => (
 						<button
 							key={type}
 							type="button"
-							className={`h-11 rounded-md text-xs font-semibold ${
+							className={clsx(
+								"touch-target-dense h-8 min-h-8 rounded-[var(--radius-sm)] text-[length:var(--text-2xs)] font-semibold transition-colors duration-[var(--duration-fast)]",
 								assetType === type
 									? "bg-primary text-primary-content"
-									: "bg-base-200 text-base-content/60"
-							}`}
+									: "bg-base-200 text-base-content/60 hover:bg-base-300",
+							)}
 							onClick={() => setAssetType(type)}
 						>
 							{assetTypeLabel(type)}
@@ -331,18 +342,20 @@ function AssetsPanel({ projectId, active }: { projectId: number; active: boolean
 				</div>
 			</div>
 
-			<div className="min-h-0 flex-1 overflow-y-auto p-3">
+			<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
 				{isLoading ? (
-					<div className="flex h-32 items-center justify-center">
-						<span className="loading loading-spinner loading-sm text-primary" />
+					<div className="flex h-28 items-center justify-center">
+						<span className="loading loading-spinner loading-sm text-primary" aria-label="加载中" />
 					</div>
 				) : items.length === 0 ? (
-					<div className="py-10 text-center text-sm text-base-content/40">
-						<SvgIcon name="archive" size={24} className="mx-auto mb-2 opacity-40" />
-						<p className="m-0">暂无资产</p>
-					</div>
+					<EmptyState
+						compact
+						icon={<SvgIcon name="archive" size={22} />}
+						title="暂无资产"
+						description="生成角色/场景后会出现在这里"
+					/>
 				) : (
-					<div className="grid grid-cols-2 gap-2">
+					<div className="grid grid-cols-2 gap-1.5">
 						{items.map((asset) => (
 							<AssetTile
 								key={asset.id}
@@ -372,8 +385,8 @@ function AssetTile({
 }) {
 	const imageUrl = getStaticUrl(asset.image_url);
 	return (
-		<div className="overflow-hidden rounded-lg border-2 border-base-content/10 bg-base-200/50">
-			<div className="aspect-[4/3] bg-base-300">
+		<div className="overflow-hidden rounded-[var(--radius-md)] border-2 border-base-content/12 bg-base-100 shadow-brutal-sm">
+			<div className="aspect-[4/3] bg-base-200">
 				{imageUrl ? (
 					<img
 						src={imageUrl}
@@ -383,39 +396,39 @@ function AssetTile({
 					/>
 				) : (
 					<div className="flex h-full items-center justify-center text-base-content/25">
-						<SvgIcon name="image" size={24} />
+						<SvgIcon name="image" size={20} />
 					</div>
 				)}
 			</div>
-			<div className="p-2">
+			<div className="p-1.5">
 				<div className="flex items-center gap-1">
-					<span className="badge badge-xs badge-outline">
+					<span className="rounded-full border border-base-content/12 bg-base-200 px-1.5 py-px font-mono text-[length:var(--text-2xs)] font-bold text-base-content/60">
 						{asset.asset_type === "character" ? "角色" : "场景"}
 					</span>
-					<h3 className="m-0 min-w-0 flex-1 truncate text-xs font-bold">
+					<h3 className="m-0 min-w-0 flex-1 truncate font-heading text-[length:var(--text-2xs)] font-bold">
 						{asset.name}
 					</h3>
 				</div>
-				<div className="mt-2 flex justify-end gap-1">
+				<div className="mt-1.5 flex justify-end gap-0.5">
 					<Button
 						variant="ghost"
 						size="sm"
-						className="gap-1 text-xs"
+						className="!h-7 !min-h-7 gap-1 !px-1.5 text-[length:var(--text-2xs)]"
 						disabled={busy}
 						onClick={onUse}
 					>
-						<SvgIcon name="plus" size={12} />
+						<SvgIcon name="plus" size={11} />
 						使用
 					</Button>
 					<Button
 						variant="ghost"
 						size="sm"
-						className="text-error"
+						className="!h-7 !min-h-7 !px-1.5 text-error"
 						disabled={busy}
 						onClick={onDelete}
 						aria-label="删除资产"
 					>
-						<SvgIcon name="trash-2" size={12} />
+						<SvgIcon name="trash-2" size={11} />
 					</Button>
 				</div>
 			</div>

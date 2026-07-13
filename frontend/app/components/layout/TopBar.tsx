@@ -6,9 +6,12 @@ import {
 	MoonIcon,
 	SunIcon,
 	SparklesIcon,
+	GlobeAltIcon,
+	HomeIcon,
+	RectangleStackIcon,
 } from "@heroicons/react/24/outline";
-import { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useState, useRef, useEffect, type ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { projectsApi, universesApi } from "~/services/api";
 import { useThemeStore } from "~/stores/themeStore";
@@ -16,6 +19,7 @@ import { useSettingsStore } from "~/stores/settingsStore";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
 import type { Project } from "~/types";
 import { Button } from "~/components/ui/Button";
+import { clsx } from "clsx";
 
 interface TopBarProps {
 	projectId?: number;
@@ -39,8 +43,7 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 	}, [open]);
 
 	const list = (projects ?? []) as Project[];
-	const currentTitle =
-		list.find((p) => p.id === currentId)?.title || "项目";
+	const currentTitle = list.find((p) => p.id === currentId)?.title || "项目";
 
 	return (
 		<div className="relative min-w-0" ref={ref}>
@@ -69,12 +72,12 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 					aria-label="项目列表"
 				>
 					<Link
-						to="/"
+						to="/projects"
 						onClick={() => setOpen(false)}
 						className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-base-content/60 transition-colors duration-[var(--duration-fast)] hover:bg-base-300"
 					>
-						<SparklesIcon className="h-3 w-3" aria-hidden="true" />
-						首页 — 所有项目
+						<RectangleStackIcon className="h-3 w-3" aria-hidden="true" />
+						全部项目
 					</Link>
 					<div className="my-1 border-t border-base-content/10" />
 					{list.map((p) => {
@@ -146,7 +149,7 @@ function UniverseChip() {
 	const label =
 		chapterNumber != null
 			? `${universe?.name ?? "宇宙"} · 第${chapterNumber}章`
-			: universe?.name ?? "宇宙";
+			: (universe?.name ?? "宇宙");
 
 	return (
 		<Link
@@ -160,13 +163,47 @@ function UniverseChip() {
 	);
 }
 
+function NavLink({
+	to,
+	label,
+	icon,
+	active,
+}: {
+	to: string;
+	label: string;
+	icon: ReactNode;
+	active: boolean;
+}) {
+	return (
+		<Link
+			to={to}
+			aria-current={active ? "page" : undefined}
+			className={clsx(
+				"touch-target-dense inline-flex h-8 min-h-8 items-center gap-1 rounded-[var(--radius-md)] px-2 text-[length:var(--text-xs)] font-bold transition-colors duration-[var(--duration-fast)]",
+				active
+					? "bg-primary/12 text-primary"
+					: "text-base-content/65 hover:bg-base-200 hover:text-base-content",
+			)}
+		>
+			{icon}
+			<span className="hidden sm:inline">{label}</span>
+		</Link>
+	);
+}
+
 export function TopBar({ projectId }: TopBarProps) {
 	const { theme, toggleTheme } = useThemeStore();
 	const isDark = theme.endsWith("dark");
 	const { openModal: openSettingsModal } = useSettingsStore();
+	const { pathname } = useLocation();
 
 	const chromeBtn =
 		"touch-target-dense !h-8 !min-h-8 gap-1 !px-2 transition-colors duration-[var(--duration-fast)]";
+
+	const homeActive = pathname === "/";
+	const projectsActive =
+		pathname.startsWith("/projects") || pathname.startsWith("/project/");
+	const universesActive = pathname.startsWith("/universes");
 
 	return (
 		<header
@@ -174,29 +211,49 @@ export function TopBar({ projectId }: TopBarProps) {
 			data-shell="topbar"
 		>
 			<div className="flex min-w-0 items-center gap-1.5">
+				<Link
+					to="/"
+					className="touch-target-dense inline-flex items-center rounded-[var(--radius-md)] px-1.5 font-comic text-base tracking-wide text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:text-lg sm:font-bold sm:tracking-wider"
+					aria-label="openOii 首页"
+				>
+					openOii
+				</Link>
+
 				{projectId ? (
 					<>
-						<Link
-							to="/"
-							className="touch-target-dense inline-flex items-center rounded-[var(--radius-md)] px-1.5 font-comic text-base tracking-wide text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-							aria-label="返回首页"
-						>
-							openOii
-						</Link>
 						<span className="text-base-content/25" aria-hidden="true">
 							/
 						</span>
 						<ProjectDropdown currentId={projectId} />
 						<UniverseChip />
 					</>
-				) : (
-					<Link
+				) : null}
+
+				<nav
+					className="ml-1 flex items-center gap-0.5 border-l border-base-content/10 pl-1.5"
+					aria-label="主导航"
+				>
+					<NavLink
 						to="/"
-						className="touch-target-dense inline-flex items-center rounded-[var(--radius-md)] px-1 font-comic text-lg font-bold tracking-wider text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-					>
-						openOii
-					</Link>
-				)}
+						label="创作"
+						active={homeActive}
+						icon={<HomeIcon className="h-3.5 w-3.5" aria-hidden="true" />}
+					/>
+					<NavLink
+						to="/projects"
+						label="项目"
+						active={projectsActive && !homeActive}
+						icon={
+							<RectangleStackIcon className="h-3.5 w-3.5" aria-hidden="true" />
+						}
+					/>
+					<NavLink
+						to="/universes"
+						label="宇宙"
+						active={universesActive}
+						icon={<GlobeAltIcon className="h-3.5 w-3.5" aria-hidden="true" />}
+					/>
+				</nav>
 			</div>
 
 			<div className="min-w-0 flex-1" />

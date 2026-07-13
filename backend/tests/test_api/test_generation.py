@@ -7,7 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlmodel import select
 
 from app.api.deps import get_app_settings, get_db_session, get_ws_manager
-from app.agents.review_rules import ReviewRuleEngine
+from app.agents.review_rules import ReviewAgent
 from app.api.v1.routes import generation as generation_routes
 from app.main import create_app
 from app.models.agent_run import AgentRun
@@ -384,26 +384,48 @@ async def test_feedback_project_returns_409_for_active_conflict(async_client, te
 
 
 @pytest.mark.asyncio
-async def test_review_rule_engine_routes_shot_feedback_to_render(test_session, test_settings):
+async def test_review_agent_routes_shot_feedback_to_render(test_session, test_settings):
+    import json
+
     from tests.agent_fixtures import FakeLLM, make_context
 
     project = await create_project(test_session)
     run = await create_run(test_session, project_id=project.id)
+    llm = FakeLLM(
+        json.dumps(
+            {
+                "agent": "review",
+                "analysis": {
+                    "feedback_type": "shot",
+                    "summary": "重渲染镜头",
+                    "target_items": [],
+                    "suggested_changes": "重画",
+                },
+                "routing": {
+                    "start_agent": "render",
+                    "mode": "incremental",
+                    "reason": "shot image redo",
+                },
+                "target_ids": {"character_ids": [], "shot_ids": []},
+            },
+            ensure_ascii=False,
+        )
+    )
     ctx = await make_context(
         test_session,
         test_settings,
         project=project,
         run=run,
-        llm=FakeLLM("{}"),
+        llm=llm,
     )
     ctx.user_feedback = "请重新渲染这个镜头"
     ctx.feedback_type = "shot"
 
-    engine = ReviewRuleEngine()
-    routing = await engine.run(ctx)
+    routing = await ReviewAgent().run(ctx)
 
     assert routing["start_agent"] == "render"
     assert routing["mode"] == "incremental"
+    assert len(llm.calls) == 1
 
 
 @pytest.mark.asyncio
