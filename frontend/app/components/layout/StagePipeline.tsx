@@ -8,6 +8,7 @@ import {
 	ClockIcon,
 	ShieldCheckIcon,
 	ArrowDownTrayIcon,
+	EllipsisHorizontalIcon,
 } from "@heroicons/react/24/outline";
 import type { WorkflowStage } from "~/types";
 import { STAGE_PIPELINE, getPipelineStageIndex } from "~/utils/pipeline";
@@ -43,11 +44,20 @@ const STATUS_DOT: Record<WorkbenchStatus["state"], string> = {
 	cancelled: "bg-base-content/35",
 	ready: "bg-success",
 	superseded: "bg-warning",
+	failed: "bg-error",
 	blocked: "bg-error",
 };
 
 const chromeBtn =
 	"touch-target-dense !h-8 !min-h-8 gap-1 !px-2 text-xs transition-colors duration-[var(--duration-fast)]";
+
+// daisyUI dropdown 靠 focus 展开，执行动作后主动收起菜单
+function runMenuAction(action: () => void) {
+	if (document.activeElement instanceof HTMLElement) {
+		document.activeElement.blur();
+	}
+	action();
+}
 
 export function StagePipeline({
 	currentStage,
@@ -69,7 +79,12 @@ export function StagePipeline({
 	const currentIndex = getPipelineStageIndex(currentStage);
 	const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
 	const generateLabel =
-		workbenchStatus.state === "idle" ? "开始生成" : "重新生成";
+		workbenchStatus.state === "idle"
+			? "开始生成"
+			: workbenchStatus.state === "failed" ||
+					workbenchStatus.state === "recoverable"
+				? "重试失败阶段"
+				: "重新生成";
 	const hasTools = Boolean(onOpenVersions || onOpenConsistency || onExport);
 
 	return (
@@ -89,7 +104,8 @@ export function StagePipeline({
 					className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[workbenchStatus.state]}`}
 					aria-hidden="true"
 				/>
-				<span className="hidden max-w-[5.5rem] truncate font-mono text-[length:var(--text-2xs)] font-semibold tabular-nums text-base-content/75 sm:inline">
+				{/* 状态文案在所有视口可见：<sm 只剩色点时色盲无法区分状态 */}
+				<span className="inline-block max-w-[4.5rem] truncate font-mono text-[length:var(--text-2xs)] font-semibold tabular-nums text-bc-muted sm:max-w-[5.5rem]">
 					{workbenchStatus.label}
 				</span>
 				<div
@@ -105,7 +121,7 @@ export function StagePipeline({
 						style={{ width: `${progressPercent}%` }}
 					/>
 				</div>
-				<span className="w-8 font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/70">
+				<span className="w-8 font-mono text-[length:var(--text-2xs)] tabular-nums text-bc-muted">
 					{progressPercent}%
 				</span>
 			</div>
@@ -125,8 +141,8 @@ export function StagePipeline({
 									current
 										? "bg-primary text-primary-content"
 										: past
-											? "text-base-content/70"
-											: "text-base-content/40"
+											? "text-bc-muted"
+											: "text-bc-muted"
 								}`}
 								aria-current={current ? "step" : undefined}
 							>
@@ -154,54 +170,69 @@ export function StagePipeline({
 
 			<div className="flex shrink-0 items-center gap-1">
 				{hasTools ? (
-					<div
-						className="mr-0.5 hidden items-center gap-0.5 border-r border-base-content/10 pr-1 sm:flex"
-						role="group"
-						aria-label="工作台工具"
-					>
-						{onOpenVersions ? (
-							<Button
-								variant="ghost"
-								size="sm"
-								className={chromeBtn}
-								onClick={onOpenVersions}
-								aria-label="打开版本对比"
-								title="版本"
-							>
-								<ClockIcon className="h-3.5 w-3.5" aria-hidden="true" />
-								<span className="hidden lg:inline">版本</span>
-							</Button>
-						) : null}
-						{onOpenConsistency ? (
-							<Button
-								variant="ghost"
-								size="sm"
-								className={chromeBtn}
-								onClick={onOpenConsistency}
-								aria-label="打开一致性报告"
-								title="一致性"
-							>
-								<ShieldCheckIcon className="h-3.5 w-3.5" aria-hidden="true" />
-								<span className="hidden lg:inline">一致性</span>
-							</Button>
-						) : null}
-						{onExport ? (
-							<Button
-								variant="ghost"
-								size="sm"
-								className={chromeBtn}
-								onClick={onExport}
-								disabled={exportBusy || isGenerating}
-								aria-label="导出 Webtoon 长图"
-								title="导出"
-								loading={exportBusy}
-							>
-								{exportBusy ? null : (
-									<ArrowDownTrayIcon className="h-3.5 w-3.5" aria-hidden="true" />
-								)}
-								<span className="hidden lg:inline">导出</span>
-							</Button>
-						) : null}
+					// 版本/一致性/导出收进溢出菜单：所有视口可达（<sm 原先整组消失，导出无入口）
+					<div className="dropdown dropdown-end mr-0.5 border-r border-base-content/10 pr-1">
+						<button
+							type="button"
+							tabIndex={0}
+							className={`btn btn-ghost btn-sm ${chromeBtn}`}
+							aria-label="工作台工具"
+							aria-haspopup="menu"
+							title="版本 / 一致性 / 导出"
+						>
+							<EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
+							<span className="hidden lg:inline">工具</span>
+						</button>
+						<ul
+							tabIndex={0}
+							role="menu"
+							aria-label="工作台工具菜单"
+							className="dropdown-content menu z-[var(--z-dropdown)] mt-1 w-44 rounded-[var(--radius-md)] border-2 border-base-content/12 bg-base-100 p-1 shadow-brutal-sm"
+						>
+							{onOpenVersions ? (
+								<li role="none">
+									<button
+										type="button"
+										role="menuitem"
+										className="gap-2 text-xs"
+										onClick={() => runMenuAction(onOpenVersions)}
+										aria-label="打开版本对比"
+									>
+										<ClockIcon className="h-3.5 w-3.5" aria-hidden="true" />
+										版本对比
+									</button>
+								</li>
+							) : null}
+							{onOpenConsistency ? (
+								<li role="none">
+									<button
+										type="button"
+										role="menuitem"
+										className="gap-2 text-xs"
+										onClick={() => runMenuAction(onOpenConsistency)}
+										aria-label="打开一致性报告"
+									>
+										<ShieldCheckIcon className="h-3.5 w-3.5" aria-hidden="true" />
+										一致性报告
+									</button>
+								</li>
+							) : null}
+							{onExport ? (
+								<li role="none">
+									<button
+										type="button"
+										role="menuitem"
+										className="gap-2 text-xs"
+										onClick={() => runMenuAction(onExport)}
+										disabled={exportBusy || isGenerating}
+										aria-label="导出 Webtoon 长图"
+									>
+										<ArrowDownTrayIcon className="h-3.5 w-3.5" aria-hidden="true" />
+										{exportBusy ? "导出中…" : "导出 Webtoon"}
+									</button>
+								</li>
+							) : null}
+						</ul>
 					</div>
 				) : null}
 

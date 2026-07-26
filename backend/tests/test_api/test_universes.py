@@ -172,3 +172,105 @@ async def test_shared_character_response_preserves_has_embedding(async_client, t
     detail_res = await async_client.get(f"/api/v1/universes/{universe.id}")
     assert detail_res.status_code == 200
     assert detail_res.json()["shared_characters"][0]["has_embedding"] is True
+
+
+async def test_import_character_into_same_universe_project(async_client, test_session):
+    from app.models.project import Project
+
+    universe = Universe(name="Import World")
+    test_session.add(universe)
+    await test_session.commit()
+    await test_session.refresh(universe)
+
+    project = Project(
+        title="第1章",
+        story="s",
+        style="anime",
+        status="draft",
+        universe_id=universe.id,
+    )
+    shared = SharedCharacter(universe_id=universe.id, name="艾拉", description="勘探员")
+    test_session.add(project)
+    test_session.add(shared)
+    await test_session.commit()
+    await test_session.refresh(project)
+    await test_session.refresh(shared)
+
+    res = await async_client.post(
+        f"/api/v1/universes/projects/{project.id}/import-character/{shared.id}"
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert data["name"] == "艾拉"
+    assert data["project_id"] == project.id
+
+
+async def test_import_character_rejects_cross_universe_project(async_client, test_session):
+    from app.models.project import Project, Character
+    from sqlalchemy import select
+
+    universe_a = Universe(name="Universe A")
+    universe_b = Universe(name="Universe B")
+    test_session.add(universe_a)
+    test_session.add(universe_b)
+    await test_session.commit()
+    await test_session.refresh(universe_a)
+    await test_session.refresh(universe_b)
+
+    # 目标项目属于 B 宇宙（或不属于任何宇宙），共享角色属于 A 宇宙
+    project_other = Project(
+        title="别人的项目",
+        story="s",
+        style="anime",
+        status="draft",
+        universe_id=universe_b.id,
+    )
+    project_orphan = Project(title="无宇宙项目", story="s", style="anime", status="draft")
+    shared = SharedCharacter(universe_id=universe_a.id, name="艾拉", description="勘探员")
+    test_session.add(project_other)
+    test_session.add(project_orphan)
+    test_session.add(shared)
+    await test_session.commit()
+    await test_session.refresh(project_other)
+    await test_session.refresh(project_orphan)
+    await test_session.refresh(shared)
+
+    for pid in (project_other.id, project_orphan.id):
+        res = await async_client.post(
+            f"/api/v1/universes/projects/{pid}/import-character/{shared.id}"
+        )
+        assert res.status_code == 400
+        assert "universe" in res.json()["detail"].lower()
+
+    # 跨宇宙导入被拒后，目标项目不应出现该角色
+    chars = await test_session.execute(
+        select(Character).where(Character.project_id == project_other.id)
+    )
+    assert chars.scalars().all() == []
+
+
+async def test_import_character_missing_shared_character_returns_404(
+    async_client, test_session
+):
+    from app.models.project import Project
+
+    universe = Universe(name="Missing Char World")
+    test_session.add(universe)
+    await test_session.commit()
+    await test_session.refresh(universe)
+
+    project = Project(
+        title="第1章",
+        story="s",
+        style="anime",
+        status="draft",
+        universe_id=universe.id,
+    )
+    test_session.add(project)
+    await test_session.commit()
+    await test_session.refresh(project)
+
+    res = await async_client.post(
+        f"/api/v1/universes/projects/{project.id}/import-character/99999"
+    )
+    assert res.status_code == 404

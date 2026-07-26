@@ -130,14 +130,12 @@ export function WorkspaceSidebar({
 		<aside
 			className={clsx(
 				"z-[var(--z-sticky)] flex shrink-0 flex-col border-base-content/12 bg-base-100 transition-[width] duration-[var(--duration-normal)]",
-				"absolute inset-x-1.5 bottom-1.5 top-auto rounded-[var(--radius-lg)] border-2 shadow-brutal lg:relative lg:inset-auto lg:rounded-none lg:shadow-none",
-				isLeft
-					? "lg:border-r lg:border-y-0 lg:border-l-0"
-					: "lg:border-l lg:border-y-0 lg:border-r-0",
+				// <lg：参与布局的普通块（与预览区上下分栏），不再是遮住画布的底部浮层；折叠只在 lg+ 生效
+				"relative h-[min(58vh,520px)] w-full border-t-2 lg:h-full lg:border-t-0",
+				isLeft ? "lg:border-r" : "lg:border-l",
 				collapsed
-					? "h-auto w-auto lg:h-full lg:w-[var(--workbench-sidebar-collapsed)]"
-					: "h-[min(58vh,520px)] lg:h-full lg:w-[var(--workbench-sidebar)]",
-				collapsed && "max-lg:hidden",
+					? "lg:w-[var(--workbench-sidebar-collapsed)]"
+					: "lg:w-[var(--workbench-sidebar)]",
 			)}
 			aria-label="Agent 工作区"
 			data-shell="agent-column"
@@ -145,7 +143,10 @@ export function WorkspaceSidebar({
 			<div
 				className={clsx(
 					"grid gap-0.5 border-b border-base-content/10 p-0.5",
-					collapsed ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_var(--touch-target-dense)]",
+					// <lg 折叠按钮不渲染，占位列只在 lg+ 存在
+					collapsed
+						? "grid-cols-1"
+						: "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_var(--touch-target-dense)]",
 				)}
 			>
 				<div
@@ -167,7 +168,7 @@ export function WorkspaceSidebar({
 								"touch-target-dense flex items-center justify-center gap-1 rounded-[var(--radius-sm)] text-[length:var(--text-2xs)] font-semibold transition-colors duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
 								activeTab === tab.key
 									? "bg-primary text-primary-content"
-									: "text-base-content/65 hover:bg-base-200",
+									: "text-bc-muted hover:bg-base-200",
 							)}
 							onClick={() => selectTab(tab.key)}
 							aria-label={tab.label}
@@ -184,7 +185,8 @@ export function WorkspaceSidebar({
 				</div>
 				<button
 					type="button"
-					className="touch-target-dense flex items-center justify-center rounded-[var(--radius-sm)] text-base-content/50 transition-colors duration-[var(--duration-fast)] hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+					// <lg 收起后没有任何入口能再展开，因此折叠按钮只在 lg+ 出现
+					className="touch-target-dense hidden items-center justify-center rounded-[var(--radius-sm)] text-bc-muted transition-colors duration-[var(--duration-fast)] hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 lg:flex"
 					onClick={() => onCollapsedChange?.(!collapsed)}
 					aria-label={collapsed ? "展开工作区" : "收起工作区"}
 					title={collapsed ? "展开工作区" : "收起工作区"}
@@ -218,7 +220,7 @@ export function WorkspaceSidebar({
 						{selectionLabel ? (
 							<div className="shrink-0 border-b border-accent/25 bg-accent/10 px-2 py-1">
 								<p className="m-0 truncate text-[length:var(--text-2xs)] font-bold text-accent">
-									<span className="font-mono font-normal text-base-content/45">
+									<span className="font-mono font-normal text-bc-muted">
 										绑定 ·{" "}
 									</span>
 									{selectionLabel}
@@ -304,14 +306,14 @@ function AssetsPanel({ projectId, active }: { projectId: number; active: boolean
 			<div className="border-b border-base-content/10 px-2 py-1.5">
 				<div className="mb-1.5 flex items-center justify-between gap-2">
 					<div className="min-w-0">
-						<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/45">
+						<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-bc-muted">
 							assets
 						</p>
 						<h2 className="m-0 font-heading text-[length:var(--text-sm)] font-bold">
 							资产库
 						</h2>
 					</div>
-					<span className="rounded-full border border-base-content/12 bg-base-200 px-2 py-0.5 font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/60">
+					<span className="rounded-full border border-base-content/12 bg-base-200 px-2 py-0.5 font-mono text-[length:var(--text-2xs)] tabular-nums text-bc-muted">
 						{data?.total ?? 0}
 					</span>
 				</div>
@@ -332,7 +334,7 @@ function AssetsPanel({ projectId, active }: { projectId: number; active: boolean
 								"touch-target-dense h-8 min-h-8 rounded-[var(--radius-sm)] text-[length:var(--text-2xs)] font-semibold transition-colors duration-[var(--duration-fast)]",
 								assetType === type
 									? "bg-primary text-primary-content"
-									: "bg-base-200 text-base-content/60 hover:bg-base-300",
+									: "bg-base-200 text-bc-muted hover:bg-base-300",
 							)}
 							onClick={() => setAssetType(type)}
 						>
@@ -402,7 +404,7 @@ function AssetTile({
 			</div>
 			<div className="p-1.5">
 				<div className="flex items-center gap-1">
-					<span className="rounded-full border border-base-content/12 bg-base-200 px-1.5 py-px font-mono text-[length:var(--text-2xs)] font-bold text-base-content/60">
+					<span className="rounded-full border border-base-content/12 bg-base-200 px-1.5 py-px font-mono text-[length:var(--text-2xs)] font-bold text-bc-muted">
 						{asset.asset_type === "character" ? "角色" : "场景"}
 					</span>
 					<h3 className="m-0 min-w-0 flex-1 truncate font-heading text-[length:var(--text-2xs)] font-bold">

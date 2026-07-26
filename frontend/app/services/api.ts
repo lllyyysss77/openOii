@@ -290,6 +290,12 @@ export const projectsApi = {
 			body: JSON.stringify({ run_id: runId }),
 		}),
 
+	/** 页面加载时水合运行态：与 /generate 409 分支同构的 RecoveryControlRead */
+	generationState: (id: number) =>
+		fetchApi<import("~/types").RecoveryControlRead | null>(
+			`/api/v1/projects/${id}/generation-state`,
+		),
+
 	feedback: (
 		id: number,
 		content: string,
@@ -656,24 +662,6 @@ export const universesApi = {
 
 	delete: (id: number) =>
 		fetchApi<void>(`/api/v1/universes/${id}`, { method: "DELETE" }),
-
-	addProject: (
-		universeId: number,
-		projectId: number,
-		chapterNumber?: number | null,
-		chapterTitle?: string | null,
-	) =>
-		fetchApi<import("~/types").UniverseProjectLinkRead>(
-			`/api/v1/universes/${universeId}/projects`,
-			{
-				method: "POST",
-				body: JSON.stringify({
-					project_id: projectId,
-					chapter_number: chapterNumber ?? null,
-					chapter_title: chapterTitle ?? null,
-				}),
-			},
-		),
 
 	removeProject: (universeId: number, projectId: number) =>
 		fetchApi<void>(

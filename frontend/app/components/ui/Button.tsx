@@ -32,9 +32,11 @@ export function Button({
   };
 
   const sizeStyles = {
-    sm: "h-8 min-h-8 touch-target-dense gap-1 px-2.5 py-1 text-sm",
-    md: "h-9 min-h-9 touch-target-dense gap-1.5 px-3.5 py-1.5 text-base",
-    lg: "h-11 min-h-11 touch-target gap-2 px-5 py-2 text-lg",
+    // 不设 min-h-*：让 touch-target-dense 的 min-height 在触屏 (pointer:coarse)
+    // 下升到 44px，也允许调用方用 min-h-[...] 覆盖
+    sm: "h-8 touch-target-dense gap-1 px-2.5 py-1 text-sm",
+    md: "h-9 touch-target-dense gap-1.5 px-3.5 py-1.5 text-base",
+    lg: "h-11 touch-target gap-2 px-5 py-2 text-lg",
   };
 
   const handleClick = async (e: React.MouseEvent<HTMLButtonElement>) => {

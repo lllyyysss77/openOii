@@ -25,7 +25,7 @@ export function SectionCard({
 			<div className="mb-2 flex flex-wrap items-center justify-between gap-2">
 				<div className="flex min-w-0 items-center gap-1.5">
 					{icon ? (
-						<span className="shrink-0 text-base-content/70" aria-hidden="true">
+						<span className="shrink-0 text-bc-muted" aria-hidden="true">
 							{icon}
 						</span>
 					) : null}
@@ -33,7 +33,7 @@ export function SectionCard({
 						{title}
 					</h2>
 					{meta ? (
-						<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/40">
+						<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-bc-muted">
 							{meta}
 						</span>
 					) : null}
@@ -78,7 +78,7 @@ export function DenseRow({
 						{title}
 					</div>
 					{subtitle ? (
-						<div className="truncate text-[length:var(--text-2xs)] text-base-content/50">
+						<div className="truncate text-[length:var(--text-2xs)] text-bc-muted">
 							{subtitle}
 						</div>
 					) : null}

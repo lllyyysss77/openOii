@@ -68,11 +68,33 @@ describe("HomePage", () => {
   });
 
   it("renders title and textarea", () => {
-    renderHomePage();
+    const { container } = renderHomePage();
+    // 页头必须出自共享 PageHeader，与其余三页一致
+    expect(container.querySelector('[data-shell="page-header"]')).not.toBeNull();
     expect(screen.getByRole("heading", { name: "创作台" })).toBeInTheDocument();
     expect(screen.getByLabelText("输入你的故事创意")).toBeInTheDocument();
+    // 巨卡已拆：工作流/故事创意 走 DeskSection 区块语法，不再有「开工配置」外壳
+    expect(container.querySelector('[data-shell="desk-section"]')).not.toBeNull();
     expect(screen.getByRole("heading", { name: "工作流" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "开工配置" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "故事创意" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "开工配置" })).toBeNull();
+  });
+
+  it("skill cards show description and non-color selected cue", () => {
+    renderHomePage();
+    // 选项卡必须带 description 文案，不再是只有 4 个字的空板
+    expect(
+      screen.getByText("一句话开故事：大纲 → 角色 → 分镜 → 成片。"),
+    ).toBeInTheDocument();
+    const active = screen.getByRole("button", { name: /剧情故事/ });
+    expect(active).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /角色设计/ }));
+    expect(
+      screen.getByRole("button", { name: /角色设计/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: /剧情故事/ }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
   it("applies skill preset to creation form", async () => {
@@ -80,7 +102,10 @@ describe("HomePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /快速成片/ }));
     const textarea = screen.getByLabelText("输入你的故事创意") as HTMLTextAreaElement;
     expect(textarea.placeholder).toMatch(/一句话|自动推进/);
-    expect(screen.getByText("quick-short")).toBeInTheDocument();
+    // 预填透明化徽章：显示实际生效的参数而非内部 skill id
+    expect(screen.getByText(/已预填 快速生成/)).toBeInTheDocument();
+    // 旅程线：选择前就能看到节奏差异
+    expect(screen.getAllByText(/全自动不打断/).length).toBeGreaterThan(0);
   });
 
   it("submits story on button click", async () => {

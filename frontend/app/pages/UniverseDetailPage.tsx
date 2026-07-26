@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { clsx } from "clsx";
 import { universesApi } from "~/services/api";
 import { SharedCharacterCard } from "~/components/universe/SharedCharacterCard";
 import { EmptyState } from "~/components/ui/EmptyState";
-import { SectionCard } from "~/components/ui/SectionCard";
+import { DeskSection } from "~/components/layout/DeskSection";
 import { Button } from "~/components/ui/Button";
 import { Input } from "~/components/ui/Input";
 import { Modal } from "~/components/ui/Modal";
@@ -18,6 +19,7 @@ import {
 	PencilSquareIcon,
 } from "@heroicons/react/24/outline";
 import { toast } from "~/utils/toast";
+import { ApiError } from "~/types/errors";
 import type { SharedCharacterRead, UniverseDetail } from "~/types";
 import { PageBody, PageShell } from "~/components/layout/PageShell";
 import { PageContent, PageHeader } from "~/components/layout/PageHeader";
@@ -43,7 +45,7 @@ export function UniverseDetailPage() {
 		character_tags: "",
 	});
 
-	const { data: universe, isLoading } = useQuery({
+	const { data: universe, isLoading, isError, error } = useQuery({
 		queryKey: ["universe", id],
 		queryFn: () => universesApi.get(id),
 		enabled: !isNaN(id),
@@ -112,8 +114,8 @@ export function UniverseDetailPage() {
 		}) => universesApi.importCharacter(projectId, sharedId),
 		onSuccess: (char) => {
 			toast.success({
-				title: "已导入章节",
-				message: `角色「${char.name}」已写入项目 #${char.project_id}`,
+				title: "已导入角色",
+				message: `角色「${char.name}」已写入目标章节`,
 			});
 			queryClient.invalidateQueries({
 				queryKey: ["characters", char.project_id],
@@ -135,15 +137,52 @@ export function UniverseDetailPage() {
 		);
 	}
 
-	if (!universe) {
+	// 「宇宙不存在」只对应 404；其余失败是服务故障，给重试入口
+	const isNotFound =
+		isNaN(id) || (isError && error instanceof ApiError && error.status === 404);
+
+	if (isNotFound) {
 		return (
 			<PageShell data-shell="universe-detail-missing">
 				<TopBar />
 				<div className="flex flex-1 flex-col items-center justify-center gap-3">
-					<p className="m-0 text-[length:var(--text-sm)] text-base-content/50">宇宙不存在</p>
+					<p className="m-0 text-[length:var(--text-sm)] text-bc-muted">宇宙不存在</p>
 					<Link to="/universes">
 						<Button size="sm" variant="secondary">返回宇宙列表</Button>
 					</Link>
+				</div>
+			</PageShell>
+		);
+	}
+
+	if (isError || !universe) {
+		return (
+			<PageShell data-shell="universe-detail-error">
+				<TopBar />
+				<div className="flex flex-1 items-center justify-center p-4">
+					<div className="flex min-h-[10rem] w-full max-w-md flex-col items-center justify-center gap-3 rounded-[var(--radius-lg)] border-2 border-error/25 bg-error/5 px-4 text-center">
+						<div>
+							<p className="m-0 font-heading text-[length:var(--text-md)] font-bold text-error">
+								宇宙加载失败
+							</p>
+							<p className="m-0 mt-0.5 text-[length:var(--text-xs)] text-bc-muted">
+								服务暂时不可用，数据还在，稍后重试
+							</p>
+						</div>
+						<div className="flex items-center gap-2">
+							<Button
+								size="sm"
+								onClick={() =>
+									queryClient.invalidateQueries({ queryKey: ["universe", id] })
+								}
+							>
+								重试
+							</Button>
+							<Link to="/universes">
+								<Button size="sm" variant="ghost">返回宇宙列表</Button>
+							</Link>
+						</div>
+					</div>
 				</div>
 			</PageShell>
 		);
@@ -173,12 +212,17 @@ export function UniverseDetailPage() {
 		if (!Number.isFinite(projectId) || projectId <= 0) {
 			toast.error({
 				title: "请选择章节",
-				message: "先填写要导入到的项目 ID（章节列表中的项目）",
+				message: "先在「导入到」下拉框选择目标章节",
 			});
 			return;
 		}
 		importMutation.mutate({ projectId, sharedId: character.id });
 	};
+
+	const chapterOptionLabel = (ch: (typeof u.chapters)[number]) =>
+		`${ch.chapter_number != null ? `第${ch.chapter_number}章` : "未编号"} · ${
+			ch.chapter_title || ch.project_title || "未命名"
+		}`;
 
 	return (
 		<PageShell data-shell="universe-detail">
@@ -193,7 +237,7 @@ export function UniverseDetailPage() {
 						u.description ||
 						"尚未填写简介 · 可在右侧编辑设定"
 					}
-					meta={`${u.chapters.length} 章 · ${u.shared_characters.length} 角色`}
+					meta={`${u.chapters.length} 章节 · ${u.shared_characters.length} 角色`}
 					actions={
 						<>
 							<Link
@@ -217,141 +261,173 @@ export function UniverseDetailPage() {
 				/>
 
 
-				{u.world_setting ? (
-					<SectionCard
-						title="世界观设定"
-						icon={<GlobeAltIcon className="h-4 w-4" aria-hidden="true" />}
-						variant="primary"
+				{u.world_setting || u.style_rules ? (
+					<div
+						className={clsx(
+							"grid gap-[var(--rhythm-zone)]",
+							// 两段设定并存时桌面端并排，避免全宽长行难读
+							u.world_setting && u.style_rules && "lg:grid-cols-2",
+						)}
 					>
-						<p className="m-0 whitespace-pre-wrap text-[length:var(--text-sm)] text-base-content/70">
-							{u.world_setting}
-						</p>
-					</SectionCard>
+						{u.world_setting ? (
+							<DeskSection
+								title="世界观设定"
+								icon={<GlobeAltIcon className="h-4 w-4" aria-hidden="true" />}
+							>
+								<p className="m-0 whitespace-pre-wrap text-[length:var(--text-sm)] text-bc-muted">
+									{u.world_setting}
+								</p>
+							</DeskSection>
+						) : null}
+
+						{u.style_rules ? (
+							<DeskSection
+								title="统一风格规则"
+								icon={<PaintBrushIcon className="h-4 w-4" aria-hidden="true" />}
+							>
+								<p className="m-0 whitespace-pre-wrap text-[length:var(--text-sm)] text-bc-muted">
+									{u.style_rules}
+								</p>
+							</DeskSection>
+						) : null}
+					</div>
 				) : null}
 
-				{u.style_rules ? (
-					<SectionCard
-						title="统一风格规则"
-						icon={<PaintBrushIcon className="h-4 w-4" aria-hidden="true" />}
-						variant="accent"
+				{/* 桌面端双栏：章节列表 7fr | 共享角色库 5fr；<lg 回落单列堆叠 */}
+				<div className="grid items-start gap-[var(--rhythm-zone)] lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+					<DeskSection
+						title="章节列表"
+						icon={<BookOpenIcon className="h-4 w-4" aria-hidden="true" />}
+						meta={`${u.chapters.length} 章节`}
 					>
-						<p className="m-0 whitespace-pre-wrap text-[length:var(--text-sm)] text-base-content/70">
-							{u.style_rules}
-						</p>
-					</SectionCard>
-				) : null}
-
-				<SectionCard
-					title="章节列表"
-					icon={<BookOpenIcon className="h-4 w-4" aria-hidden="true" />}
-					meta={`${u.chapters.length} 章`}
-				>
-					{u.chapters.length === 0 ? (
-						<EmptyState
-							compact
-							title="还没有章节"
-							description="从顶栏「新建章节」创建第一个工作区"
-							action={
-								<Link to={createChapterHref}>
-									<Button size="sm">新建章节</Button>
-								</Link>
-							}
-						/>
-					) : (
-						<div className="space-y-1">
-							{[...u.chapters]
-								.sort(
-									(a, b) =>
-										(a.chapter_number ?? 999) - (b.chapter_number ?? 999),
-								)
-								.map((ch) => (
-									<div
-										key={ch.id}
-										className="flex min-h-10 items-center justify-between gap-2 rounded-[var(--radius-md)] border border-base-content/8 bg-base-200/50 px-2 py-1.5 transition-colors duration-[var(--duration-fast)] hover:bg-base-200"
-									>
-										<div className="flex min-w-0 items-center gap-2">
-											<span className="badge badge-primary badge-sm shrink-0 font-bold tabular-nums">
-												第{ch.chapter_number ?? "?"}章
-											</span>
-											<Link
-												to={`/project/${ch.project_id}`}
-												className="truncate font-heading text-[length:var(--text-sm)] font-bold transition-colors hover:text-primary"
-											>
-												{ch.chapter_title || ch.project_title || "未命名"}
-											</Link>
-											<span className="font-mono text-[length:var(--text-2xs)] text-base-content/35">
-												#{ch.project_id}
-											</span>
-											{!ch.is_main_story ? (
-												<span className="badge badge-ghost badge-xs shrink-0">
-													外传
-												</span>
-											) : null}
-										</div>
-										<button
-											type="button"
-											className="btn btn-ghost btn-xs h-7 min-h-7 text-error/50 hover:text-error"
-											aria-label={`从宇宙移除${ch.chapter_title || ch.project_title || "未命名项目"}`}
-											title="从宇宙移除"
-											onClick={() =>
-												removeProjectMutation.mutate(ch.project_id)
-											}
+						{u.chapters.length === 0 ? (
+							<EmptyState
+								compact
+								title="还没有章节"
+								description="章节是宇宙里的一部作品，创建后进入画布开始生成"
+								action={
+									<Link to={createChapterHref}>
+										<Button size="sm">新建章节</Button>
+									</Link>
+								}
+							/>
+						) : (
+							<div className="flex flex-col gap-[var(--rhythm-item)]">
+								{[...u.chapters]
+									.sort(
+										(a, b) =>
+											(a.chapter_number ?? 999) - (b.chapter_number ?? 999),
+									)
+									.map((ch) => (
+										<div
+											key={ch.id}
+											className="flex min-h-10 items-center justify-between gap-2 rounded-[var(--radius-md)] border border-base-content/8 bg-base-200/50 px-2 py-1.5 transition-colors duration-[var(--duration-fast)] hover:bg-base-200"
 										>
-											<TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
-										</button>
-									</div>
-								))}
-						</div>
-					)}
-				</SectionCard>
+											<div className="flex min-w-0 items-center gap-2">
+												{ch.chapter_number != null ? (
+													<span className="badge badge-primary badge-sm shrink-0 font-bold tabular-nums">
+														第{ch.chapter_number}章
+													</span>
+												) : (
+													<span className="badge badge-ghost badge-sm shrink-0">
+														未编号
+													</span>
+												)}
+												<Link
+													to={`/project/${ch.project_id}`}
+													className="truncate font-heading text-[length:var(--text-sm)] font-bold transition-colors hover:text-primary-ink"
+												>
+													{ch.chapter_title || ch.project_title || "未命名"}
+												</Link>
+												<span className="font-mono text-[length:var(--text-2xs)] text-bc-muted">
+													#{ch.project_id}
+												</span>
+												{!ch.is_main_story ? (
+													<span className="badge badge-ghost badge-xs shrink-0">
+														外传
+													</span>
+												) : null}
+											</div>
+											<button
+												type="button"
+												className="btn btn-ghost btn-xs h-7 min-h-7 text-error/50 hover:text-error"
+												aria-label={`从宇宙移除${ch.chapter_title || ch.project_title || "未命名项目"}`}
+												title="从宇宙移除"
+												onClick={() =>
+													removeProjectMutation.mutate(ch.project_id)
+												}
+											>
+												<TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
+											</button>
+										</div>
+									))}
+							</div>
+						)}
+					</DeskSection>
 
-				<SectionCard
-					title="共享角色库"
-					icon={<UserGroupIcon className="h-4 w-4" aria-hidden="true" />}
-					meta={`${u.shared_characters.length} 个`}
-					actions={
-						<>
-							<label className="flex items-center gap-1 text-[length:var(--text-2xs)] text-base-content/55">
-								导入到
-								<input
-									className="input input-bordered input-xs h-7 w-20 font-mono"
-									placeholder={defaultImportProjectId || "ID"}
-									value={importProjectId}
-									onChange={(e) => setImportProjectId(e.target.value)}
-									inputMode="numeric"
-									aria-label="导入到项目 ID"
-								/>
-							</label>
-							<Button size="sm" onClick={() => setCreateCharOpen(true)}>
-								+ 手动创建
-							</Button>
-						</>
-					}
-				>
-					{u.shared_characters.length === 0 ? (
-						<EmptyState
-							compact
-							title="还没有共享角色"
-							description="可在章节工作台把角色「提升到宇宙」，或在此手动创建"
-							action={
-								<Button size="sm" variant="secondary" onClick={() => setCreateCharOpen(true)}>
-									手动创建
+					<DeskSection
+						title="共享角色库"
+						icon={<UserGroupIcon className="h-4 w-4" aria-hidden="true" />}
+						meta={`${u.shared_characters.length} 个`}
+						actions={
+							<>
+								<label className="flex items-center gap-1 text-[length:var(--text-2xs)] text-bc-muted">
+									导入到
+									<select
+										className="select select-bordered select-xs h-7 max-w-40 bg-base-200"
+										value={importProjectId || defaultImportProjectId}
+										onChange={(e) => setImportProjectId(e.target.value)}
+										disabled={u.chapters.length === 0}
+										aria-label="导入到章节"
+										title={
+											u.chapters.length === 0
+												? "先创建章节，才能把共享角色导入进去"
+												: undefined
+										}
+									>
+										{u.chapters.length === 0 ? (
+											<option value="">暂无章节可导入</option>
+										) : (
+											u.chapters.map((ch) => (
+												<option key={ch.project_id} value={String(ch.project_id)}>
+													{chapterOptionLabel(ch)}
+												</option>
+											))
+										)}
+									</select>
+								</label>
+								<Button size="sm" onClick={() => setCreateCharOpen(true)}>
+									+ 手动创建
 								</Button>
-							}
-						/>
-					) : (
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-							{u.shared_characters.map((sc) => (
-								<SharedCharacterCard
-									key={sc.id}
-									character={sc}
-									showImport={u.chapters.length > 0}
-									onImport={handleImport}
-								/>
-							))}
-						</div>
-					)}
-				</SectionCard>
+							</>
+						}
+					>
+						{u.shared_characters.length === 0 ? (
+							<EmptyState
+								compact
+								title="还没有共享角色"
+								description="可在章节工作台把角色「提升到宇宙」，或在此手动创建"
+								action={
+									<Button size="sm" onClick={() => setCreateCharOpen(true)}>
+										手动创建
+									</Button>
+								}
+							/>
+						) : (
+							// lg 下坐在 5fr 窄栏里，收窄为两列
+							<div className="grid grid-cols-2 gap-[var(--rhythm-item)] sm:grid-cols-3 lg:grid-cols-2">
+								{u.shared_characters.map((sc) => (
+									<SharedCharacterCard
+										key={sc.id}
+										character={sc}
+										showImport={u.chapters.length > 0}
+										onImport={handleImport}
+									/>
+								))}
+							</div>
+						)}
+					</DeskSection>
+				</div>
 				</PageContent>
 			</PageBody>
 

@@ -24,6 +24,12 @@ import type {
 	ProjectConsistencyRead,
 } from "~/types";
 
+/**
+ * Recharts 只接受具体颜色字符串，无法用 Tailwind class。
+ * 走 daisyUI 主题变量，使图表随 doodle / doodle-dark 主题一起切换。
+ */
+const CHART_ACCENT = "oklch(var(--p))";
+
 interface ConsistencyPanelProps {
 	projectId: number;
 	onClose: () => void;
@@ -119,8 +125,8 @@ function CharacterCard({
 									<Radar
 										name={report.character_name}
 										dataKey="value"
-										stroke="#8884d8"
-										fill="#8884d8"
+										stroke={CHART_ACCENT}
+										fill={CHART_ACCENT}
 										fillOpacity={0.3}
 									/>
 								</RadarChart>
@@ -321,7 +327,7 @@ export function ConsistencyPanel({ projectId, onClose }: ConsistencyPanelProps) 
 				<div className="sticky top-0 bg-base-100 z-10 flex items-center justify-between p-6 border-b border-base-content/10">
 					<div>
 						<h2 className="text-xl font-bold">角色一致性评估</h2>
-						<p className="text-sm text-base-content/60 mt-1">
+						<p className="text-sm text-bc-muted mt-1">
 							基于 InsightFace 人脸特征自动计算跨分镜一致性
 						</p>
 					</div>
@@ -347,7 +353,7 @@ export function ConsistencyPanel({ projectId, onClose }: ConsistencyPanelProps) 
 					)}
 
 					{!loading && !report && (
-						<div className="text-center py-12 text-base-content/50">
+						<div className="text-center py-12 text-bc-muted">
 							<p className="text-lg">尚未进行一致性评估</p>
 							<p className="text-sm mt-2">点击"开始评估"按钮来评估角色在分镜中的一致性</p>
 						</div>
@@ -393,7 +399,7 @@ export function ConsistencyPanel({ projectId, onClose }: ConsistencyPanelProps) 
 														type="monotone"
 														dataKey="score"
 														name="综合评分"
-														stroke="#8884d8"
+														stroke={CHART_ACCENT}
 														strokeWidth={2}
 														dot={{ r: 4 }}
 													/>

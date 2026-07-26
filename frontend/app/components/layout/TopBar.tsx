@@ -18,6 +18,7 @@ import { useThemeStore } from "~/stores/themeStore";
 import { useSettingsStore } from "~/stores/settingsStore";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
 import type { Project } from "~/types";
+import { getProjectStatusMeta } from "~/features/projects/statusMeta";
 import { Button } from "~/components/ui/Button";
 import { clsx } from "clsx";
 
@@ -46,24 +47,31 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 	const currentTitle = list.find((p) => p.id === currentId)?.title || "项目";
 
 	return (
-		<div className="relative min-w-0" ref={ref}>
-			<button
-				type="button"
-				onClick={() => setOpen(!open)}
-				className="touch-target-dense flex max-w-[10rem] items-center gap-1 rounded-[var(--radius-md)] px-1.5 text-sm font-heading font-bold transition-colors duration-[var(--duration-fast)] hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:max-w-[14rem]"
-				aria-expanded={open}
-				aria-haspopup="listbox"
-			>
-				<FilmIcon
-					className="h-3.5 w-3.5 flex-shrink-0 text-primary"
-					aria-hidden="true"
-				/>
-				<span className="min-w-0 truncate">{currentTitle}</span>
-				<ChevronDownIcon
-					className={`h-3 w-3 flex-shrink-0 transition-transform duration-[var(--duration-fast)] ${open ? "rotate-180" : ""}`}
-					aria-hidden="true"
-				/>
-			</button>
+		// min-w-[3rem] ≥ 按钮 min-content（两枚 shrink-0 图标 + gap + padding），
+		// 否则窄屏下按钮盒溢出 wrapper 叠印到 nav 上并抢走命中测试
+		<div className="relative min-w-[3rem]" ref={ref}>
+			{/* overflow-hidden 只能包按钮：放到外层会把下拉面板一起裁掉 */}
+			<div className="overflow-hidden">
+				<button
+					type="button"
+					onClick={() => setOpen(!open)}
+					className="touch-target-dense flex max-w-[6rem] items-center gap-1 rounded-[var(--radius-md)] px-1.5 text-sm font-heading font-bold transition-colors duration-[var(--duration-fast)] hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:max-w-[14rem]"
+					aria-expanded={open}
+					aria-haspopup="listbox"
+				>
+					<FilmIcon
+						className="h-3.5 w-3.5 flex-shrink-0 text-primary"
+						aria-hidden="true"
+					/>
+					<span className="min-w-0 truncate" title={currentTitle}>
+						{currentTitle}
+					</span>
+					<ChevronDownIcon
+						className={`h-3 w-3 flex-shrink-0 transition-transform duration-[var(--duration-fast)] ${open ? "rotate-180" : ""}`}
+						aria-hidden="true"
+					/>
+				</button>
+			</div>
 
 			{open && (
 				<div
@@ -74,23 +82,14 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 					<Link
 						to="/projects"
 						onClick={() => setOpen(false)}
-						className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-base-content/60 transition-colors duration-[var(--duration-fast)] hover:bg-base-300"
+						className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-bc-muted transition-colors duration-[var(--duration-fast)] hover:bg-base-300"
 					>
 						<RectangleStackIcon className="h-3 w-3" aria-hidden="true" />
 						全部项目
 					</Link>
 					<div className="my-1 border-t border-base-content/10" />
 					{list.map((p) => {
-						const statusMap: Record<string, { label: string; cls: string }> = {
-							draft: { label: "草稿", cls: "text-base-content/70" },
-							planning: { label: "规划中", cls: "text-base-content" },
-							ready: { label: "完成", cls: "text-base-content" },
-							superseded: { label: "已覆盖", cls: "text-base-content/70" },
-						};
-						const st = statusMap[p.status] ?? {
-							label: p.status,
-							cls: "text-base-content/70",
-						};
+						const st = getProjectStatusMeta(p.status);
 						return (
 							<Link
 								key={p.id}
@@ -100,13 +99,13 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 								aria-selected={p.id === currentId}
 								className={`flex items-center justify-between px-3 py-1.5 text-xs transition-colors duration-[var(--duration-fast)] hover:bg-base-300 ${
 									p.id === currentId
-										? "bg-primary/10 font-bold text-primary"
+										? "bg-primary/10 font-bold text-primary-ink"
 										: ""
 								}`}
 							>
 								<span className="min-w-0 flex-1 truncate">{p.title}</span>
 								<span
-									className={`ml-1.5 flex-shrink-0 font-mono text-[length:var(--text-2xs)] tabular-nums ${st.cls}`}
+									className={`ml-1.5 flex-shrink-0 font-mono text-[length:var(--text-2xs)] tabular-nums ${st.textCls}`}
 								>
 									{st.label}
 								</span>
@@ -117,7 +116,7 @@ function ProjectDropdown({ currentId }: { currentId?: number }) {
 					<Link
 						to="/"
 						onClick={() => setOpen(false)}
-						className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-primary transition-colors duration-[var(--duration-fast)] hover:bg-base-300"
+						className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-primary-ink transition-colors duration-[var(--duration-fast)] hover:bg-base-300"
 					>
 						<PlusIcon className="h-3 w-3" aria-hidden="true" />
 						新建项目
@@ -154,7 +153,7 @@ function UniverseChip() {
 	return (
 		<Link
 			to={`/universes/${universeId}`}
-			className="touch-target-dense hidden max-w-[11rem] items-center gap-1 truncate rounded-full border border-primary/25 bg-primary/10 px-2 text-[length:var(--text-2xs)] font-bold text-primary transition-colors hover:bg-primary/15 sm:inline-flex"
+			className="touch-target-dense hidden max-w-[11rem] items-center gap-1 truncate rounded-full border border-primary/25 bg-primary/10 px-2 text-[length:var(--text-2xs)] font-bold text-primary-ink transition-colors hover:bg-primary/15 sm:inline-flex"
 			title={chapterTitle || universe?.name || "IP 宇宙"}
 		>
 			<SparklesIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -179,10 +178,11 @@ function NavLink({
 			to={to}
 			aria-current={active ? "page" : undefined}
 			className={clsx(
-				"touch-target-dense inline-flex h-8 min-h-8 items-center gap-1 rounded-[var(--radius-md)] px-2 text-[length:var(--text-xs)] font-bold transition-colors duration-[var(--duration-fast)]",
+				"touch-target-dense inline-flex h-8 items-center gap-1 rounded-[var(--radius-md)] px-2 text-[length:var(--text-xs)] font-bold transition-colors duration-[var(--duration-fast)]",
 				active
-					? "bg-primary/12 text-primary"
-					: "text-base-content/65 hover:bg-base-200 hover:text-base-content",
+					? // 文字用 primary-ink 保证可读，底部内阴影提供颜色之外的第二视觉通道
+						"bg-primary/12 text-primary-ink shadow-[inset_0_-3px_0_0_oklch(var(--p))]"
+					: "text-bc-muted hover:bg-base-200 hover:text-base-content",
 			)}
 		>
 			{icon}
@@ -230,7 +230,7 @@ export function TopBar({ projectId }: TopBarProps) {
 				) : null}
 
 				<nav
-					className="ml-1 flex items-center gap-0.5 border-l border-base-content/10 pl-1.5"
+					className="ml-1 flex shrink-0 items-center gap-0.5 border-l border-base-content/10 pl-1.5"
 					aria-label="主导航"
 				>
 					<NavLink

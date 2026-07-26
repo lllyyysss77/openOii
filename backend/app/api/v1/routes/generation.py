@@ -25,6 +25,7 @@ from app.schemas.project import (
     FeedbackRequest,
     GenerateRequest,
     ProviderResolution,
+    RecoveryControlRead,
     ResumeRequest,
 )
 from app.services.generation_entry import decide_generation_entry
@@ -74,6 +75,40 @@ async def _latest_run_for_project(
         .limit(1)
     )
     return res.scalars().first()
+
+
+@router.get("/{project_id}/generation-state", response_model=RecoveryControlRead | None)
+async def get_generation_state(
+    project_id: int,
+    session: AsyncSession = SessionDep,
+    settings: Settings = SettingsDep,
+) -> RecoveryControlRead | None:
+    """页面加载时的运行态水合入口。
+
+    与 /generate 的 409 分支返回同一份 RecoveryControlRead，
+    让前端不必先撞一次冲突才能发现可恢复的运行。
+    """
+    await get_or_404(session, Project, project_id)
+
+    active_run = await _latest_run_for_project(session, project_id, ("queued", "running"))
+    if active_run is not None:
+        return await build_recovery_control_surface(
+            session=session,
+            database_url=settings.database_url,
+            run=active_run,
+            state="active" if task_manager.is_running(project_id) else "recoverable",
+        )
+
+    resumable_run = await _latest_run_for_project(session, project_id, ("failed", "cancelled"))
+    if resumable_run is not None:
+        return await build_recovery_control_surface(
+            session=session,
+            database_url=settings.database_url,
+            run=resumable_run,
+            state="recoverable",
+        )
+
+    return None
 
 
 @router.post(

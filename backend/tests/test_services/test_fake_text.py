@@ -71,19 +71,6 @@ async def test_fake_text_visual_notes_response() -> None:
     assert "视觉特征" in response.text or "短发" in response.text
 
 
-@pytest.mark.asyncio
-async def test_fake_text_reimagine_response() -> None:
-    service = FakeTextService(Settings(database_url="sqlite+aiosqlite:///:memory:"))
-    response = await service.generate(
-        system="你是动画导演助理。根据用户提供的参考片描述输出严格 JSON 对象。 schema keys: [\"narrative_arc\"]",
-        prompt="参考内容：\n主角在工作室按下生成按钮\n\n只输出一个 JSON 对象，不要 Markdown 代码块，不要额外解释。",
-    )
-    data = json.loads(response.text)
-
-    assert "narrative_arc" in data
-    assert "characters" in data
-    assert data["visual_style"]
-
 
 @pytest.mark.asyncio
 async def test_fake_text_incremental_plan_preserves_ids() -> None:

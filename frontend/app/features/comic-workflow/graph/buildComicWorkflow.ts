@@ -170,7 +170,7 @@ function sectionCountLabel(
 	}
 	if (section === "elements") {
 		const count = nodes.filter((node) => node.kind === "character").length;
-		return `${count} elements`;
+		return count === 1 ? "1 element" : `${count} elements`;
 	}
 	if (section === "shotline") {
 		const count = nodes.filter((node) => node.kind === "shot").length;
@@ -263,6 +263,7 @@ export function buildComicWorkflow({
 			projectId: project.id,
 			videoUrl: project.video_url,
 			blockingClips: blockers,
+			exports: project.exports ?? [],
 		});
 	}
 

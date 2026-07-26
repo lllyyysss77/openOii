@@ -289,6 +289,35 @@ describe('ProjectsPage', () => {
     expect(screen.getByText('Project 2')).toBeInTheDocument();
   });
 
+  it('uses card-style rows below sm and keeps the five-column table grid from sm up', () => {
+    const { container } = render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
+
+    // 表头 <sm 隐藏，sm+ 才按表格网格展示
+    const headerRow = screen.getByText('状态').parentElement;
+    expect(headerRow).toHaveClass('hidden', 'sm:grid');
+    expect(headerRow).toHaveClass('sm:grid-cols-[2.75rem_minmax(0,1fr)_7rem_7rem_2.75rem]');
+
+    // 行：<sm 三列卡片布局，sm+ 维持现有五列网格
+    const row = container.querySelector('article');
+    expect(row).toHaveClass('grid-cols-[auto_minmax(0,1fr)_auto]');
+    expect(row).toHaveClass('sm:grid-cols-[2.75rem_minmax(0,1fr)_7rem_7rem_2.75rem]');
+
+    // 标题 <sm 完整换行，仅 sm+ 截断
+    const title = screen.getByText('Project 1');
+    expect(title).toHaveClass('sm:truncate');
+    expect(title).not.toHaveClass('truncate');
+
+    // 状态胶囊+时间戳在 <sm 合并为一行，sm+ 用 contents 还原独立网格单元
+    const statusLine = screen.getAllByText('未知状态')[0].parentElement;
+    expect(statusLine).toHaveClass('sm:contents', 'col-start-2', 'row-start-2');
+
+    // 删除按钮走 touch-target-dense（coarse 指针下自动 44px），可达名称保留
+    const deleteButton = screen.getByRole('button', { name: '删除项目 Project 1' });
+    expect(deleteButton).toHaveClass('touch-target-dense');
+    const batchButton = screen.getByRole('button', { name: '批量删除（0）' });
+    expect(batchButton).toHaveClass('touch-target-dense');
+  });
+
   it('labels per-project selection and delete controls for assistive technology', () => {
     render(<MemoryRouter><ProjectsPage /></MemoryRouter>);
 

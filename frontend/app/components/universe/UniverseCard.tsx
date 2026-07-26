@@ -8,6 +8,18 @@ interface UniverseCardProps {
 	onDelete: (universe: Universe) => void;
 }
 
+function formatDate(value: string | null | undefined) {
+	if (!value) return "未知";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return "未知";
+	return new Intl.DateTimeFormat("zh-CN", {
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+	}).format(date);
+}
+
 export function UniverseCard({ universe, onDelete }: UniverseCardProps) {
 	return (
 		<div className="group relative" data-shell="universe-card">
@@ -24,32 +36,27 @@ export function UniverseCard({ universe, onDelete }: UniverseCardProps) {
 								loading="lazy"
 							/>
 						</div>
-					) : (
-						<div className="-mx-1 -mt-1 mb-2 flex h-14 items-center justify-center rounded-[var(--radius-md)] border border-dashed border-base-content/15 bg-base-200/50">
-							<span className="font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/35">
-								universe
-							</span>
-						</div>
-					)}
+					) : null}
 
-					<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/45">
-						ip cosmos
+					{/* 无封面时不放装饰占位；顶行给有区分度的更新时间 */}
+					<p className="m-0 font-mono text-[length:var(--text-2xs)] tracking-wide text-bc-muted">
+						更新 {formatDate(universe.updated_at)}
 					</p>
-					<h2 className="m-0 mt-0.5 font-heading text-[length:var(--text-sm)] font-bold leading-snug">
+					<h2 className="m-0 mt-0.5 font-heading text-[length:var(--text-md)] font-bold leading-snug">
 						{universe.name}
 					</h2>
 
 					{universe.description ? (
-						<p className="m-0 mt-1 line-clamp-2 text-[length:var(--text-xs)] text-base-content/65">
+						<p className="m-0 mt-1 line-clamp-2 text-[length:var(--text-xs)] text-bc-muted">
 							{universe.description}
 						</p>
 					) : (
-						<p className="m-0 mt-1 text-[length:var(--text-2xs)] text-base-content/40">
+						<p className="m-0 mt-1 text-[length:var(--text-2xs)] text-bc-muted">
 							尚未填写简介
 						</p>
 					)}
 
-					<div className="mt-2 flex flex-wrap items-center gap-1.5 text-[length:var(--text-2xs)] font-semibold text-base-content/55">
+					<div className="mt-2 flex flex-wrap items-center gap-1.5 text-[length:var(--text-2xs)] font-semibold text-bc-muted">
 						<span className="inline-flex items-center gap-1 rounded-full border border-base-content/12 bg-base-200 px-1.5 py-0.5 tabular-nums">
 							<SparklesIcon className="h-3 w-3" aria-hidden="true" />
 							{universe.projects_count} 章节
@@ -64,7 +71,7 @@ export function UniverseCard({ universe, onDelete }: UniverseCardProps) {
 
 			<button
 				type="button"
-				className="absolute right-1.5 top-1.5 rounded-full border border-base-content/10 bg-base-100/95 p-1.5 text-base-content/40 opacity-0 transition-[opacity,color,background-color] duration-[var(--duration-fast)] hover:bg-error/15 hover:text-error group-hover:opacity-100 focus-visible:opacity-100"
+				className="absolute right-1.5 top-1.5 rounded-full border border-base-content/10 bg-base-100/95 p-1.5 text-bc-muted opacity-0 transition-[opacity,color,background-color] duration-[var(--duration-fast)] hover:bg-error/15 hover:text-error group-hover:opacity-100 focus-visible:opacity-100"
 				onClick={(e) => {
 					e.preventDefault();
 					e.stopPropagation();

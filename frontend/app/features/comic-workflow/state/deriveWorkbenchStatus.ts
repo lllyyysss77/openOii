@@ -8,6 +8,7 @@ export type WorkbenchStatusState =
 	| "cancelled"
 	| "ready"
 	| "superseded"
+	| "failed"
 	| "blocked";
 
 export type LastRunTerminalStatus = "cancelled" | null;
@@ -61,6 +62,10 @@ const WORKBENCH_STATUS_COPY: Record<
 		label: "需重合成",
 		description: "画布内容已更新，当前成片需要重新合成",
 	},
+	failed: {
+		label: "生成失败",
+		description: "最近一次生成失败，可从失败阶段重试",
+	},
 	blocked: {
 		label: "阻塞",
 		description: "当前内容存在阻塞项，需要处理后继续",
@@ -106,12 +111,12 @@ export function deriveWorkbenchStatus(
 		return getWorkbenchStatusMeta("cancelled");
 	}
 
-	if (
-		hasBlockingClips ||
-		projectStatus === "blocked" ||
-		projectStatus === "failed" ||
-		projectStatus === "error"
-	) {
+	// failed 是独立终态：列表页显示「生成失败」，工作台不能把它降级成「阻塞」
+	if (projectStatus === "failed" || projectStatus === "error") {
+		return getWorkbenchStatusMeta("failed");
+	}
+
+	if (hasBlockingClips || projectStatus === "blocked") {
 		return getWorkbenchStatusMeta("blocked");
 	}
 

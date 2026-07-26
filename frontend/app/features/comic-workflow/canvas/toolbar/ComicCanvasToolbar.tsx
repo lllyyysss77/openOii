@@ -79,7 +79,8 @@ export const ComicCanvasToolbar = track(function ComicCanvasToolbar({
 
 	return (
 		<div
-			className="absolute bottom-3 left-1/2 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-0.5 rounded-[var(--radius-lg)] border-2 border-base-content/15 bg-base-100 p-1 text-base-content shadow-brutal-sm sm:bottom-4 sm:max-w-none sm:flex-nowrap"
+			// <lg 不渲染：画布本身在移动端不挂载，工具条不能悬浮压住抽屉/聊天
+			className="absolute bottom-4 left-1/2 z-[var(--z-dropdown)] hidden -translate-x-1/2 items-center justify-center gap-0.5 rounded-[var(--radius-lg)] border-2 border-base-content/15 bg-base-100 p-1 text-base-content shadow-brutal-sm lg:flex"
 			role="toolbar"
 			aria-label="画布工具栏"
 		>

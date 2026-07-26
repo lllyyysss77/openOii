@@ -108,7 +108,7 @@ function ProjectRow({
 								{statusLabel(project.status)}
 							</span>
 						</div>
-						<div className="flex items-center gap-2 text-xs text-base-content/40">
+						<div className="flex items-center gap-2 text-xs text-bc-muted">
 							<span>{new Date(project.updated_at).toLocaleDateString("zh-CN")}</span>
 							{project.style && <span>{project.style}</span>}
 							{project.target_shot_count && <span>{project.target_shot_count} 镜头</span>}
@@ -254,7 +254,7 @@ export function HistoryDrawer({ open, onClose, onNavigate }: HistoryDrawerProps)
 								onChange={(e) => handleToggleSelectAll(e.target.checked)}
 								className="checkbox checkbox-xs"
 							/>
-							<span className="text-base-content/60">全选</span>
+							<span className="text-bc-muted">全选</span>
 						</label>
 						{hasSelection && (
 							<Button
@@ -277,14 +277,14 @@ export function HistoryDrawer({ open, onClose, onNavigate }: HistoryDrawerProps)
 					}}
 				>
 					{!projects || projects.length === 0 ? (
-						<div className="py-8 text-center text-[length:var(--text-xs)] text-base-content/40">
+						<div className="py-8 text-center text-[length:var(--text-xs)] text-bc-muted">
 							<SvgIcon
 								name="clapperboard"
 								size={22}
 								className="mx-auto mb-2 text-base-content/15"
 							/>
 							<p className="m-0">还没有项目</p>
-							<p className="m-0 mt-1 text-base-content/30">
+							<p className="m-0 mt-1 text-bc-muted">
 								创建新项目后会出现在这里
 							</p>
 						</div>

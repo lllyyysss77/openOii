@@ -27,15 +27,15 @@ export function EmptyState({
 			data-shell="empty-state"
 		>
 			{icon ? (
-				<div className="mb-2 text-base-content/35 opacity-80" aria-hidden="true">
+				<div className="mb-2 text-bc-subtle opacity-80" aria-hidden="true">
 					{icon}
 				</div>
 			) : null}
-			<p className="m-0 font-heading text-[length:var(--text-sm)] font-bold text-base-content/70">
+			<p className="m-0 font-heading text-[length:var(--text-sm)] font-bold text-bc-muted">
 				{title}
 			</p>
 			{description ? (
-				<p className="m-0 mt-1 max-w-sm text-[length:var(--text-xs)] text-base-content/45 text-pretty">
+				<p className="m-0 mt-1 max-w-sm text-[length:var(--text-xs)] text-bc-muted text-pretty">
 					{description}
 				</p>
 			) : null}

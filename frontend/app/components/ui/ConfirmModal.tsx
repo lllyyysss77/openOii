@@ -59,7 +59,7 @@ export function ConfirmModal({
             <h3 className="m-0 font-heading text-[length:var(--text-md)] font-bold">
               {title}
             </h3>
-            <p className="m-0 mt-1 text-[length:var(--text-sm)] text-base-content/70">
+            <p className="m-0 mt-1 text-[length:var(--text-sm)] text-bc-muted">
               {message}
             </p>
           </div>

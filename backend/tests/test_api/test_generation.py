@@ -441,3 +441,44 @@ async def test_resume_run_mismatched_project_id(async_client, test_session):
     )
     assert res.status_code == 404
     assert "Run not found" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_generation_state_none_when_no_runs(async_client, test_session):
+    project = await create_project(test_session)
+    res = await async_client.get(f"/api/v1/projects/{project.id}/generation-state")
+    assert res.status_code == 200
+    assert res.json() is None
+
+
+@pytest.mark.asyncio
+async def test_generation_state_recoverable_for_failed_run(async_client, test_session):
+    project = await create_project(test_session)
+    run = await create_run(test_session, project_id=project.id, status="failed")
+
+    res = await async_client.get(f"/api/v1/projects/{project.id}/generation-state")
+    assert res.status_code == 200
+    data = res.json()
+    assert data is not None
+    assert data["state"] == "recoverable"
+    assert data["active_run"]["id"] == run.id
+    assert "resume" in data["available_actions"]
+
+
+@pytest.mark.asyncio
+async def test_generation_state_recoverable_for_stale_running_run(async_client, test_session):
+    """DB 里是 running 但进程内没有任务（如中途崩溃）→ 应视为可恢复而非活跃。"""
+    project = await create_project(test_session)
+    await create_run(test_session, project_id=project.id, status="running")
+
+    res = await async_client.get(f"/api/v1/projects/{project.id}/generation-state")
+    assert res.status_code == 200
+    data = res.json()
+    assert data is not None
+    assert data["state"] == "recoverable"
+
+
+@pytest.mark.asyncio
+async def test_generation_state_project_not_found(async_client):
+    res = await async_client.get("/api/v1/projects/999999/generation-state")
+    assert res.status_code == 404

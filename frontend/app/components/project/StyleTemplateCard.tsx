@@ -52,7 +52,7 @@ export function StyleTemplateCard({ template, selected, onClick }: StyleTemplate
           )}
         </div>
         {template.description && (
-          <p className="text-xs text-base-content/60 mt-1 line-clamp-2">
+          <p className="text-xs text-bc-muted mt-1 line-clamp-2">
             {template.description}
           </p>
         )}

@@ -36,7 +36,7 @@ export function OutlinePreviewCard({
 	return (
 		<div className="card-comic bg-base-100 p-3 space-y-2 text-sm">
 			<div>
-				<p className="text-[10px] uppercase tracking-widest text-base-content/40 font-bold">
+				<p className="text-[10px] uppercase tracking-widest text-bc-muted font-bold">
 					Story Outline
 				</p>
 				<h3 className="font-heading font-bold text-base">故事大纲待确认</h3>
@@ -60,13 +60,13 @@ export function OutlinePreviewCard({
 						<p className="font-bold text-xs">
 							第 {act.act} 幕 · {act.title}
 						</p>
-						<p className="text-xs text-base-content/60">{act.summary}</p>
+						<p className="text-xs text-bc-muted">{act.summary}</p>
 					</div>
 				))}
 			</div>
 
 			{visualBible && (
-				<p className="text-xs text-base-content/60 bg-base-200/60 rounded-md p-2">
+				<p className="text-xs text-bc-muted bg-base-200/60 rounded-md p-2">
 					<span className="font-bold">视觉指南：</span>
 					{visualBible.slice(0, 120)}{visualBible.length > 120 ? "..." : ""}
 				</p>

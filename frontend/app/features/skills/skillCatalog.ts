@@ -131,3 +131,44 @@ export function getSkillById(
 ): SkillPreset | undefined {
 	return catalog.find((skill) => skill.id === id);
 }
+
+/**
+ * 工作流旅程：把「选这条路意味着什么」显性化。
+ * 这是老用户才知道的默会知识——审阅模式会在规划与渲染后各停一次等确认，
+ * 快速模式一路跑到成片不打断。新用户在选择时就该看到这个差异。
+ */
+export interface SkillJourney {
+	/** 用户视角的阶段链（不是内部 stage 名） */
+	stages: string[];
+	/** 审阅停点次数；0 = 全自动 */
+	reviewStops: number;
+	/** 一句话节奏说明 */
+	pace: string;
+}
+
+const SKILL_JOURNEYS: Record<string, SkillJourney> = {
+	"story-anime": {
+		stages: ["大纲", "角色", "分镜", "成片"],
+		reviewStops: 2,
+		pace: "停 2 次审阅",
+	},
+	"character-design": {
+		stages: ["人设", "形象图", "验收镜头"],
+		reviewStops: 2,
+		pace: "人设定稿再出镜头",
+	},
+	"quick-short": {
+		stages: ["大纲", "分镜", "成片"],
+		reviewStops: 0,
+		pace: "全自动不打断",
+	},
+};
+
+export function journeyForSkill(skill: SkillPreset): SkillJourney {
+	const known = SKILL_JOURNEYS[skill.id];
+	if (known) return known;
+	// API 新增的未知工作流：按生成方式推导，保证旅程线永远有内容
+	return skill.prefill.creationMode === "quick"
+		? { stages: ["大纲", "分镜", "成片"], reviewStops: 0, pace: "全自动不打断" }
+		: { stages: ["大纲", "分镜", "成片"], reviewStops: 2, pace: "停 2 次审阅" };
+}

@@ -31,6 +31,8 @@ import {
 	deriveWorkbenchStatus,
 	type LastRunTerminalStatus,
 } from "~/features/comic-workflow/state/deriveWorkbenchStatus";
+import { MobileWorkbenchPreview } from "~/features/comic-workflow/mobile/MobileWorkbenchPreview";
+import { useIsMobileWorkbench } from "~/features/comic-workflow/mobile/useIsMobileWorkbench";
 import { projectsApi, exportApi, getStaticUrl } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
 import type {
@@ -181,19 +183,19 @@ export function ProjectPage() {
 		}
 	}, [projectError, projectId, queryClient]);
 
-	const { data: characters, isLoading: charactersLoading } = useQuery({
+	const { data: characters } = useQuery({
 		queryKey: ["characters", projectId],
 		queryFn: () => projectsApi.getCharacters(projectId),
 		enabled: !!project,
 	});
 
-	const { data: shots, isLoading: shotsLoading } = useQuery({
+	const { data: shots } = useQuery({
 		queryKey: ["shots", projectId],
 		queryFn: () => projectsApi.getShots(projectId),
 		enabled: !!project,
 	});
 
-	const { data: messages, isLoading: messagesLoading } = useQuery({
+	const { data: messages } = useQuery({
 		queryKey: ["messages", projectId],
 		queryFn: () => projectsApi.getMessages(projectId),
 		enabled: !!project,
@@ -210,6 +212,37 @@ export function ProjectPage() {
 			useEditorStore.getState().setShots(shots);
 		}
 	}, [shots]);
+
+	// 运行态水合：不必先撞一次 409 才能发现可恢复的运行
+	const { data: hydratedGenerationState } = useQuery({
+		queryKey: ["generation-state", projectId],
+		queryFn: () => projectsApi.generationState(projectId),
+		enabled: projectId > 0,
+		retry: 1,
+		refetchOnWindowFocus: false,
+	});
+
+	useEffect(() => {
+		if (!hydratedGenerationState) return;
+		const s = useEditorStore.getState();
+		// WS 已建立实时态时不覆盖
+		if (s.isGenerating || s.currentRunId) return;
+		s.setRecoveryControl(hydratedGenerationState);
+		s.setRecoverySummary(hydratedGenerationState.recovery_summary);
+		if (hydratedGenerationState.state === "active") {
+			// currentRunId 只在真活跃时设置：recoverable 状态设了会让
+			// hasActiveRun 误判为生成中，把「恢复」按钮短路成只剩「停止」
+			s.setCurrentRunId(hydratedGenerationState.active_run.id);
+			s.setGenerating(true);
+			s.setCurrentAgent(hydratedGenerationState.active_run.current_agent);
+			s.setProgress(hydratedGenerationState.active_run.progress ?? 0);
+		}
+		const stage = toSimplifiedStage(
+			hydratedGenerationState.recovery_summary.next_stage ??
+				hydratedGenerationState.recovery_summary.current_stage,
+		);
+		if (stage) s.setCurrentStage(stage);
+	}, [hydratedGenerationState]);
 
 	useEffect(() => {
 		if (project) {
@@ -237,6 +270,14 @@ export function ProjectPage() {
 					project.creation_mode === "quick" ? "yolo" : "manual",
 				);
 				runModeInitializedRef.current = project.id;
+			}
+			// 初始阶段按项目真实状态落位，而不是每次打开都归零到 规划/0%。
+			// 有实时运行态或恢复水合时让位给它们（recovery_summary 的 stage 更精确）。
+			if (!editorStore.isGenerating && !editorStore.currentRunId) {
+				if (project.status === "ready" && project.video_url) {
+					editorStore.setCurrentStage("compose");
+					editorStore.setProgress(1);
+				}
 			}
 		}
 	}, [project]);
@@ -333,9 +374,10 @@ export function ProjectPage() {
 					const s = useEditorStore.getState();
 					s.setRecoveryControl(control);
 					s.setRecoverySummary(control.recovery_summary);
-					s.setCurrentRunId(control.active_run.id);
 					s.setGenerating(control.state === "active");
 					if (control.state === "active") {
+						// recoverable 时不设 currentRunId，避免「恢复」按钮被短路成「停止」
+						s.setCurrentRunId(control.active_run.id);
 						s.setCurrentAgent(control.active_run.current_agent);
 						s.setProgress(control.active_run.progress);
 					}
@@ -344,6 +386,17 @@ export function ProjectPage() {
 							control.recovery_summary.current_stage,
 					);
 					if (stage) s.setCurrentStage(stage);
+					// 说明性提示：按钮此时会静默换成「恢复 / 停止」，
+					// 不提示的话用户会以为点击没有生效
+					toast.info({
+						title:
+							control.state === "active" ? "已有生成正在进行" : "发现可恢复的运行",
+						message:
+							control.state === "active"
+								? "已接管当前运行的进度，可选择停止后重新生成"
+								: "可从上次中断的阶段继续，或停止后重新开始",
+						duration: 5000,
+					});
 				} else {
 					toast.warning({
 						title: "请稍等片刻",
@@ -406,9 +459,10 @@ export function ProjectPage() {
 					const s = useEditorStore.getState();
 					s.setRecoveryControl(control);
 					s.setRecoverySummary(control.recovery_summary);
-					s.setCurrentRunId(control.active_run.id);
 					s.setGenerating(control.state === "active");
 					if (control.state === "active") {
+						// recoverable 时不设 currentRunId，避免「恢复」按钮被短路成「停止」
+						s.setCurrentRunId(control.active_run.id);
 						s.setCurrentAgent(control.active_run.current_agent);
 						s.setProgress(control.active_run.progress);
 					}
@@ -617,6 +671,18 @@ export function ProjectPage() {
 		resumeMutation.mutate();
 	};
 
+	// 成片卡「重新合成」：有可恢复运行时走恢复（省钱），否则重新生成。
+	// 无依赖数组：每次渲染重订阅，保证闭包始终新鲜。
+	useEffect(() => {
+		return canvasEvents.on("request-regenerate", () => {
+			if (storeRecoveryControl) {
+				handleResume();
+			} else {
+				void handleGenerate();
+			}
+		});
+	});
+
 	useEffect(() => {
 		if (!storeIsGenerating) {
 			const progress = useEditorStore.getState().progress;
@@ -719,9 +785,9 @@ export function ProjectPage() {
 		}
 	}, []);
 
-	const workspaceLoading =
-		projectLoading ||
-		Boolean(project && (charactersLoading || shotsLoading || messagesLoading));
+	// 只等项目主数据；角色/分镜/消息让各区域自行渐进加载（canvas graph 是响应式构建的）
+	const workspaceLoading = projectLoading;
+	const isMobileWorkbench = useIsMobileWorkbench();
 
 	const workbenchStatus = useMemo(
 		() =>
@@ -796,15 +862,51 @@ export function ProjectPage() {
 		return (
 			<div className="page-shell items-center justify-center gap-3 bg-base-100">
 				<ArrowPathIcon
-					className="h-5 w-5 animate-pulse text-base-content/60"
+					className="h-5 w-5 animate-pulse text-bc-muted"
 					aria-hidden="true"
 				/>
-				<p className="font-mono text-sm text-base-content/70">正在加载项目…</p>
+				<p className="font-mono text-sm text-bc-muted">正在加载项目…</p>
+			</div>
+		);
+	}
+
+	const projectApiError = projectError instanceof ApiError ? projectError : null;
+	const projectNotFound = projectApiError?.status === 404;
+
+	// 非 404 的加载失败：独立错误面板 + 持久重试入口（toast 会自动消失）
+	if (projectError && !projectNotFound && !project) {
+		return (
+			<div className="page-shell items-center justify-center bg-base-100">
+				<Card className="max-w-sm text-center">
+					<h1 className="mb-2 text-xl font-heading font-bold text-pretty">
+						无法加载项目
+					</h1>
+					<p className="mb-4 text-sm text-bc-muted">
+						{projectApiError?.message || "项目数据获取失败，请检查网络后重试"}
+					</p>
+					<div className="flex flex-wrap items-center justify-center gap-2">
+						<Button
+							variant="primary"
+							onClick={() =>
+								queryClient.invalidateQueries({
+									queryKey: ["project", projectId],
+								})
+							}
+						>
+							<ArrowPathIcon className="h-4 w-4" aria-hidden="true" />
+							重试
+						</Button>
+						<Link to="/">
+							<Button variant="ghost">返回首页</Button>
+						</Link>
+					</div>
+				</Card>
 			</div>
 		);
 	}
 
 	if (!project) {
+		// 「项目未找到」只留给真 404（或查询确实返回空）
 		return (
 			<div className="page-shell items-center justify-center bg-base-100">
 				<Card className="text-center">
@@ -821,6 +923,8 @@ export function ProjectPage() {
 
 	return (
 		<div className="page-shell bg-base-100 font-sans" data-shell="director-desk">
+			{/* 工作台是全站唯一无 h1 的页面；画布 shape 不再承载标题语义 */}
+			<h1 className="sr-only">{project.title || "漫剧工作台"}</h1>
 			<a
 				href="#workbench-main"
 				className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[var(--z-modal)] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-content"
@@ -849,12 +953,30 @@ export function ProjectPage() {
 				exportBusy={exporting}
 			/>
 
-			{/* OiiOii-style: Agent/chat left · canvas right */}
+			{/* OiiOii-style: Agent/chat left · canvas right；<lg 不挂载 tldraw，改为只读预览 + 侧栏上下分栏 */}
 			<main
 				id="workbench-main"
-				className="relative flex min-h-0 flex-1 overflow-hidden"
+				className={
+					isMobileWorkbench
+						? "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+						: "relative flex min-h-0 flex-1 overflow-hidden"
+				}
 				aria-label="漫剧工作台"
 			>
+				{isMobileWorkbench ? (
+					<MobileWorkbenchPreview
+						projectId={projectId}
+						workbenchStatus={workbenchStatus}
+						videoUrl={storeProjectVideoUrl ?? project.video_url}
+						shots={storeShots}
+						characters={storeCharacters}
+						onRetry={hasRecovery ? handleResume : handleGenerate}
+						retryDisabled={
+							generateMutation.isPending || (hasActiveRun && !hasRecovery)
+						}
+					/>
+				) : null}
+
 				<WorkspaceSidebar
 					activeTab={sidebarTab}
 					onTabChange={setSidebarTab}
@@ -865,7 +987,7 @@ export function ProjectPage() {
 					onConfirm={handleConfirm}
 					onCancel={handleCancel}
 					isGenerating={hasActiveRun}
-					collapsed={workspaceCollapsed}
+					collapsed={isMobileWorkbench ? false : workspaceCollapsed}
 					onCollapsedChange={setWorkspaceCollapsed}
 					selectionLabel={
 						selectedNodeIds.length > 1
@@ -881,13 +1003,15 @@ export function ProjectPage() {
 					placement="left"
 				/>
 
-				<div className="relative min-w-0 flex-1 overflow-hidden workbench-canvas-frame">
-					<StageView
-						projectId={projectId}
-						onSelectedNodeIdChange={handleSelectedNodeIdChange}
-						onSelectedNodeIdsChange={handleSelectedNodeIdsChange}
-					/>
-				</div>
+				{!isMobileWorkbench ? (
+					<div className="relative min-w-0 flex-1 overflow-hidden workbench-canvas-frame">
+						<StageView
+							projectId={projectId}
+							onSelectedNodeIdChange={handleSelectedNodeIdChange}
+							onSelectedNodeIdsChange={handleSelectedNodeIdsChange}
+						/>
+					</div>
+				) : null}
 			</main>
 
 			{versionOpen && (

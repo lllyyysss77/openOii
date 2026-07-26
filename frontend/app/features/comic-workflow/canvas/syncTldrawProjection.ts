@@ -19,23 +19,6 @@ const WORKFLOW_FRAME_META = "openoii-comic-workflow-frame";
 
 export type WorkflowInteractionMode = "layout" | "sort" | "locked";
 
-const OLD_BUSINESS_SHAPE_TYPES = new Set([
-	"storyboard-board",
-	"canvas-frame",
-	"plan-card",
-	"character-card",
-	"shot-card",
-	"video-card",
-	"connector",
-	"ConnectorShape",
-	"script-section",
-	"plan-section",
-	"character-section",
-	"storyboard-section",
-	"video-section",
-	"compose-section",
-]);
-
 type Anchor = { x: number; y: number };
 
 interface WorkflowArrowSpec {
@@ -74,6 +57,23 @@ const SECTION_ARROW_FLOW: Array<{
 		kind: "sequence",
 	},
 ];
+
+const OLD_BUSINESS_SHAPE_TYPES = new Set([
+	"storyboard-board",
+	"canvas-frame",
+	"plan-card",
+	"character-card",
+	"shot-card",
+	"video-card",
+	"connector",
+	"ConnectorShape",
+	"script-section",
+	"plan-section",
+	"character-section",
+	"storyboard-section",
+	"video-section",
+	"compose-section",
+]);
 
 export function shapeIdForNode(nodeId: string): TLShapeId {
 	return createShapeId(`workflow-card-${nodeId.replace(/[^a-zA-Z0-9_-]/g, "-")}`);
@@ -344,6 +344,7 @@ export function createWorkflowArrowSpecs({
 	});
 }
 
+
 export function hasStaleWorkflowProjection({
 	graph,
 	layout,
@@ -377,6 +378,22 @@ export function hasStaleWorkflowProjection({
 		const id = String(shape.id);
 		return !desiredShapeIds.has(id) && !desiredArrowIds.has(id);
 	});
+}
+
+function deleteWorkflowShapes(editor: Editor, shapes: TLShape[]) {
+	if (shapes.length === 0) return;
+
+	const lockedShapes = shapes.filter((shape) => shape.isLocked);
+	if (lockedShapes.length > 0) {
+		editor.updateShapes(
+			lockedShapes.map((shape) => ({
+				id: shape.id,
+				type: shape.type,
+				isLocked: false,
+			})),
+		);
+	}
+	editor.deleteShapes(shapes.map((shape) => shape.id));
 }
 
 function workflowArrowShape(spec: WorkflowArrowSpec): TLShapePartial {
@@ -420,22 +437,6 @@ function arrowStyle(kind: string) {
 		} as const;
 	}
 	return { color: "light-blue", dash: "solid", arrowheadEnd: "arrow" } as const;
-}
-
-function deleteWorkflowShapes(editor: Editor, shapes: TLShape[]) {
-	if (shapes.length === 0) return;
-
-	const lockedShapes = shapes.filter((shape) => shape.isLocked);
-	if (lockedShapes.length > 0) {
-		editor.updateShapes(
-			lockedShapes.map((shape) => ({
-				id: shape.id,
-				type: shape.type,
-				isLocked: false,
-			})),
-		);
-	}
-	editor.deleteShapes(shapes.map((shape) => shape.id));
 }
 
 function workflowArrowBinding(
@@ -505,6 +506,7 @@ function syncWorkflowArrows(
 	]);
 	if (bindings.length > 0) editor.createBindings(bindings);
 }
+
 
 export function syncTldrawProjection({
 	editor,

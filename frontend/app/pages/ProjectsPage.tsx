@@ -20,46 +20,8 @@ import { cleanupDeletedProjectCaches } from "~/features/projects/deleteProject";
 import { toast } from "~/utils/toast";
 import { ApiError } from "~/types/errors";
 import type { Project } from "~/types";
+import { getProjectStatusMeta } from "~/features/projects/statusMeta";
 
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-	active: {
-		label: "进行中",
-		cls: "border-info/35 bg-info/10 text-base-content",
-	},
-	draft: {
-		label: "草稿",
-		cls: "border-base-content/20 bg-base-200 text-base-content",
-	},
-	failed: {
-		label: "失败",
-		cls: "border-error/35 bg-error/10 text-base-content",
-	},
-	planning: {
-		label: "规划中",
-		cls: "border-warning/35 bg-warning/10 text-base-content",
-	},
-	processing: {
-		label: "生成中",
-		cls: "border-warning/35 bg-warning/10 text-base-content",
-	},
-	ready: {
-		label: "成片可用",
-		cls: "border-success/35 bg-success/10 text-base-content",
-	},
-	superseded: {
-		label: "需重合成",
-		cls: "border-warning/35 bg-warning/10 text-base-content",
-	},
-};
-
-function projectStatusMeta(status: string) {
-	return (
-		STATUS_META[status] ?? {
-			label: status,
-			cls: "border-base-content/20 bg-base-200 text-base-content",
-		}
-	);
-}
 
 function formatDate(value: string | null | undefined) {
 	if (!value) return "未知";
@@ -202,7 +164,7 @@ export function ProjectsPage() {
 					aria-label="项目批量操作"
 				>
 					<div className="flex flex-col gap-2 p-2 sm:flex-row sm:items-center sm:justify-between">
-						<label className="touch-target-dense flex cursor-pointer select-none items-center gap-2 rounded-[var(--radius-md)] px-1.5 text-[length:var(--text-xs)] font-semibold text-base-content/70">
+						<label className="touch-target-dense flex cursor-pointer select-none items-center gap-2 rounded-[var(--radius-md)] px-1.5 text-[length:var(--text-xs)] font-semibold text-bc-muted">
 							<input
 								type="checkbox"
 								checked={allSelected}
@@ -213,14 +175,14 @@ export function ProjectsPage() {
 							<span>全选</span>
 						</label>
 						<div className="flex flex-wrap items-center gap-1.5">
-							<span className="rounded-full border border-base-content/15 bg-base-100 px-2 py-0.5 text-[length:var(--text-2xs)] font-semibold tabular-nums text-base-content/70">
+							<span className="rounded-full border border-base-content/15 bg-base-100 px-2 py-0.5 text-[length:var(--text-2xs)] font-semibold tabular-nums text-bc-muted">
 								{selectedCount > 0
 									? `已选 ${selectedCount}`
 									: "未选择"}
 							</span>
 							<button
 								type="button"
-								className="btn btn-sm btn-error h-8 min-h-8 gap-1 px-2"
+								className="btn btn-sm btn-error touch-target-dense h-8 gap-1 px-2"
 								onClick={handleBatchDeleteClick}
 								disabled={selectedCount === 0 || deleteMutation.isPending}
 							>
@@ -240,7 +202,8 @@ export function ProjectsPage() {
 						<EmptyState />
 					) : (
 						<div className="overflow-hidden rounded-[var(--radius-lg)] border-2 border-base-content/15 bg-base-100 shadow-brutal-sm">
-							<div className="grid grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_5.5rem_2.5rem] gap-2 border-b border-base-content/10 bg-base-200/65 px-2 py-1.5 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60 sm:grid-cols-[2.75rem_minmax(0,1fr)_7rem_7rem_2.75rem] sm:gap-3 sm:px-3">
+							{/* 表头只服务 sm+ 的表格网格；<sm 是卡片式行，表头隐藏 */}
+							<div className="hidden border-b border-base-content/10 bg-base-200/65 py-1.5 font-mono text-[length:var(--text-2xs)] uppercase text-bc-muted sm:grid sm:grid-cols-[2.75rem_minmax(0,1fr)_7rem_7rem_2.75rem] sm:gap-3 sm:px-3">
 								<span />
 								<span>项目</span>
 								<span>状态</span>
@@ -284,7 +247,7 @@ export function ProjectsPage() {
 function Metric({ label, value }: { label: string; value: number }) {
 	return (
 		<div className="rounded-[var(--radius-md)] border border-base-content/10 bg-base-200 px-2 py-1.5">
-			<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60">
+			<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-bc-muted">
 				{label}
 			</p>
 			<p className="m-0 font-heading text-[length:var(--text-md)] font-bold leading-none tabular-nums">
@@ -305,11 +268,12 @@ function ProjectRow({
 	onSelectedChange: (checked: boolean) => void;
 	onDelete: () => void;
 }) {
-	const status = projectStatusMeta(project.status);
+	const status = getProjectStatusMeta(project.status);
 	const story = project.story?.trim();
 
 	return (
-		<article className="grid min-h-14 grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_5.5rem_2.5rem] items-center gap-2 px-2 py-2 transition-colors duration-[var(--duration-fast)] hover:bg-base-200/45 sm:grid-cols-[2.75rem_minmax(0,1fr)_7rem_7rem_2.75rem] sm:gap-3 sm:px-3">
+		// <sm 卡片式三列（勾选｜内容｜删除，状态行落到第二行）；sm+ 维持五列表格网格
+		<article className="grid min-h-14 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 px-2 py-2 transition-colors duration-[var(--duration-fast)] hover:bg-base-200/45 sm:grid-cols-[2.75rem_minmax(0,1fr)_7rem_7rem_2.75rem] sm:items-center sm:gap-3 sm:px-3">
 			<label className="touch-target-dense flex cursor-pointer items-center justify-center rounded-[var(--radius-md)] hover:bg-base-200">
 				<input
 					type="checkbox"
@@ -329,14 +293,15 @@ function ProjectRow({
 						className="h-3.5 w-3.5 shrink-0 text-primary"
 						aria-hidden="true"
 					/>
-					<h2 className="m-0 truncate font-heading text-[length:var(--text-sm)] font-bold">
+					{/* <sm 标题完整换行展示，sm+ 才单行截断 */}
+					<h2 className="m-0 break-words font-heading text-[length:var(--text-sm)] font-bold sm:truncate">
 						{project.title}
 					</h2>
 				</div>
-				<p className="m-0 mt-0.5 truncate text-[length:var(--text-xs)] text-base-content/65">
+				<p className="m-0 mt-0.5 truncate text-[length:var(--text-xs)] text-bc-muted">
 					{story || "尚未填写故事内容"}
 				</p>
-				<div className="mt-1 flex flex-wrap gap-1.5 text-[length:var(--text-2xs)] font-semibold text-base-content/55">
+				<div className="mt-1 flex flex-wrap gap-1.5 text-[length:var(--text-2xs)] font-semibold text-bc-muted">
 					<span>{project.style || "未设风格"}</span>
 					<span className="tabular-nums">
 						{project.target_shot_count ?? "自动"} 镜头
@@ -345,19 +310,22 @@ function ProjectRow({
 				</div>
 			</Link>
 
-			<span
-				className={`inline-flex min-h-7 items-center justify-center rounded-full border px-2 text-[length:var(--text-2xs)] font-bold ${status.cls}`}
-			>
-				{status.label}
-			</span>
+			{/* <sm 状态胶囊+时间戳合并为一行小字；sm+ 用 contents 还原为两个独立网格单元 */}
+			<div className="col-start-2 row-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 sm:contents">
+				<span
+					className={`inline-flex min-h-7 items-center justify-center rounded-full border px-2 text-[length:var(--text-2xs)] font-bold ${status.badgeCls}`}
+				>
+					{status.label}
+				</span>
 
-			<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/65">
-				{formatDate(project.updated_at)}
-			</span>
+				<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-bc-muted">
+					{formatDate(project.updated_at)}
+				</span>
+			</div>
 
 			<button
 				type="button"
-				className="btn btn-ghost btn-sm btn-square h-8 min-h-8 justify-self-end text-error hover:bg-error/10"
+				className="btn btn-ghost btn-sm btn-square touch-target-dense col-start-3 row-start-1 h-8 justify-self-end text-error hover:bg-error/10 sm:col-auto sm:row-auto"
 				onClick={onDelete}
 				aria-label={`删除项目 ${project.title}`}
 				title="删除"
@@ -375,7 +343,7 @@ function LoadingState() {
 				className="h-5 w-5 animate-spin text-primary"
 				aria-hidden="true"
 			/>
-			<p className="m-0 text-[length:var(--text-sm)] font-semibold text-base-content/70">
+			<p className="m-0 text-[length:var(--text-sm)] font-semibold text-bc-muted">
 				正在加载项目…
 			</p>
 		</div>
@@ -390,7 +358,7 @@ function ErrorState() {
 				<p className="m-0 font-heading text-[length:var(--text-md)] font-bold text-error">
 					加载失败，请重试
 				</p>
-				<p className="m-0 mt-0.5 text-[length:var(--text-xs)] text-base-content/65">
+				<p className="m-0 mt-0.5 text-[length:var(--text-xs)] text-bc-muted">
 					刷新页面或检查后端是否可用
 				</p>
 			</div>

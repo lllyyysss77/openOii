@@ -22,7 +22,7 @@ const agentColors: Record<string, string> = {
   render: "text-info",
   compose: "text-warning",
   review: "text-accent",
-  system: "text-base-content/30",
+  system: "text-bc-subtle",
   user: "text-primary",
   audio: "text-secondary",
 };
@@ -66,7 +66,7 @@ function ThinkingMessage({ msg }: { msg: AgentMessage }) {
     <div className="group">
       <div className="flex items-center gap-1 mb-0.5">
         <AgentIcon className={`w-3 h-3 ${agentColors[msg.agent] || "text-base-content/30"}`} aria-hidden="true" />
-        <span className="text-xs font-comic uppercase tracking-wide text-base-content/40">{agentNameMap[msg.agent] || msg.agent}</span>
+        <span className="text-xs font-comic uppercase tracking-wide text-bc-muted">{agentNameMap[msg.agent] || msg.agent}</span>
         {phaseLabel && (
           <span className={`badge ${phaseBadge} badge-xs ml-1 font-mono text-[10px]`}>{phaseLabel}</span>
         )}
@@ -88,24 +88,24 @@ function ThinkingMessage({ msg }: { msg: AgentMessage }) {
           <LightBulbIcon className="w-4 h-4 flex-shrink-0 text-info/70" aria-hidden="true" />
           <div className="flex-1 min-w-0">
             {isExpanded ? (
-              <div className="whitespace-pre-wrap break-words text-xs text-base-content/60 leading-relaxed">
+              <div className="whitespace-pre-wrap break-words text-xs text-bc-muted leading-relaxed">
                 {msg.content}
                 {msg.details && (
-                  <div className="mt-1 text-base-content/40 border-t border-info/10 pt-1">
+                  <div className="mt-1 text-bc-muted border-t border-info/10 pt-1">
                     {msg.details}
                   </div>
                 )}
                 <button
                   onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
-                  className="mt-1 text-xs text-base-content/40 hover:text-base-content/60 transition-colors"
+                  className="mt-1 text-xs text-bc-muted hover:text-bc-muted transition-colors"
                 >
                   收起思考
                 </button>
               </div>
             ) : (
               <div>
-                <p className="text-xs text-base-content/50 leading-relaxed truncate">{firstLine}</p>
-                <span className="text-[10px] text-base-content/30 hover:text-base-content/50 transition-colors">
+                <p className="text-xs text-bc-muted leading-relaxed truncate">{firstLine}</p>
+                <span className="text-[10px] text-bc-muted hover:text-base-content transition-colors">
                   查看思考过程
                 </span>
               </div>
@@ -187,7 +187,7 @@ export function MessageList({ messages }: MessageListProps) {
 
   if (filtered.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-base-content/30">
+      <div className="flex flex-col items-center justify-center h-full text-bc-muted">
         <p className="text-xs">暂无消息</p>
       </div>
     );
@@ -210,7 +210,7 @@ export function MessageList({ messages }: MessageListProps) {
         if (msg.role === "handoff") {
           return (
             <div key={key} className="flex justify-center my-1">
-              <div className="badge badge-outline badge-sm gap-0.5 text-base-content/40 border-dashed">
+              <div className="badge badge-outline badge-sm gap-0.5 text-bc-muted border-dashed">
                 <HandRaisedIcon className="w-3 h-3" aria-hidden="true" />
                 <span className="text-xs">{msg.content}</span>
               </div>
@@ -236,7 +236,7 @@ export function MessageList({ messages }: MessageListProps) {
             {!sameAgentAsPrev && (
               <div className="flex items-center gap-1 mb-0.5">
                 <AgentIcon className={`w-3 h-3 ${agentColors[msg.agent] || "text-base-content/30"}`} aria-hidden="true" />
-                <span className="text-xs font-comic uppercase tracking-wide text-base-content/40">{agentNameMap[msg.agent] || msg.agent}</span>
+                <span className="text-xs font-comic uppercase tracking-wide text-bc-muted">{agentNameMap[msg.agent] || msg.agent}</span>
               </div>
             )}
             <div
@@ -250,7 +250,7 @@ export function MessageList({ messages }: MessageListProps) {
                 <button
                   type="button"
                   onClick={() => toggleCollapse(msg.id || "")}
-                  className="text-base-content/50 hover:text-base-content/70 transition-colors text-xs italic w-full text-left"
+                  className="text-bc-muted hover:text-bc-muted transition-colors text-xs italic w-full text-left"
                 >
                   {msg.summary}
                 </button>
@@ -272,7 +272,7 @@ export function MessageList({ messages }: MessageListProps) {
                     <button
                       type="button"
                       onClick={() => { if (msg.id) toggleCollapse(msg.id); }}
-                      className="text-xs text-base-content/20 hover:text-base-content/40 transition-colors mt-0.5"
+                      className="text-xs text-bc-subtle hover:text-bc-muted transition-colors mt-0.5"
                     >
                       收起
                     </button>
@@ -280,7 +280,7 @@ export function MessageList({ messages }: MessageListProps) {
                 </>
               )}
               {msg.isLoading && (
-                <div className="flex items-center gap-1 mt-1 text-base-content/30 text-xs">
+                <div className="flex items-center gap-1 mt-1 text-bc-muted text-xs">
                   <span className="loading loading-dots loading-xs text-primary" />
                   处理中
                 </div>

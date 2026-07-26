@@ -116,7 +116,7 @@ export function ProviderSelectionFields({
             <legend className="px-2 text-sm font-semibold text-base-content">
               {field.title}
             </legend>
-            <p className="mb-3 text-sm text-base-content/70">{field.description}</p>
+            <p className="mb-3 text-sm text-bc-muted">{field.description}</p>
 
             <div className="space-y-2">
               {field.options.map((option) => {

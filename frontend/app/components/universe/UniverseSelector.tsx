@@ -43,7 +43,7 @@ export function UniverseSelector({
 
 	if (universes.length === 0) {
 		return (
-			<p className="text-xs text-base-content/40">暂无 IP 宇宙</p>
+			<p className="text-xs text-bc-muted">暂无 IP 宇宙</p>
 		);
 	}
 
@@ -59,7 +59,7 @@ export function UniverseSelector({
 			<option value="">不关联宇宙</option>
 			{universes.map((u) => (
 				<option key={u.id} value={u.id}>
-					{u.name}（{u.projects_count} 章 / {u.shared_characters_count} 角色）
+					{u.name}（{u.projects_count} 章节 / {u.shared_characters_count} 角色）
 				</option>
 			))}
 		</select>

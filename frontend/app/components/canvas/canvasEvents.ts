@@ -1,24 +1,11 @@
-import type { ShotUpdatePayload } from "~/types";
-
-export type ShapeActionName = "add-to-assets" | "approve" | "edit" | "history" | "regenerate";
-
-export interface ShapeActionPayload {
-  shapeId: string;
-  action: ShapeActionName;
-  entityType: "character" | "shot";
-  entityId: number;
-  feedbackType: "render";
-  shotPatch?: ShotUpdatePayload;
-  feedbackContent?: string;
-}
-
 // 事件类型定义 — 只保留仍在使用的事件
 export interface CanvasEvents {
   "preview-image": { src: string; alt: string };
   "preview-video": { src: string; title: string };
   "select-workflow-node": { nodeId: string };
-  "shape-action": ShapeActionPayload;
   "version-history": { entityType: "character" | "shot"; entityId: number };
+  /** 成片卡「重新合成」→ ProjectPage 复用生成/恢复通路 */
+  "request-regenerate": { source: "output-card" };
 }
 
 type EventCallback<T> = (data: T) => void;

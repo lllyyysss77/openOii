@@ -14,7 +14,7 @@ from sqlmodel import SQLModel
 
 from app.config import get_settings
 from app.models import agent_run, artifact, artifact_version, config_item, message, project, run, stage  # noqa: F401
-from app.orchestration.persistence import ensure_postgres_checkpointer_setup
+from app.orchestration.persistence import redact_credentials, ensure_postgres_checkpointer_setup
 
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 ALEMBIC_DIR = Path(__file__).resolve().parents[2] / "alembic"
@@ -188,7 +188,7 @@ async def init_db() -> None:
         )
         await session.commit()
 
-    log.error(f"init_db: settings.database_url = {settings.database_url}")
+    log.info("init_db: database_url = %s", redact_credentials(settings.database_url))
     await ensure_postgres_checkpointer_setup(settings.database_url)
 
 

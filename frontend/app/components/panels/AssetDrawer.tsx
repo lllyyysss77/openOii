@@ -264,7 +264,7 @@ function CreateAssetForm({ isOpen, onClose, onCreated }: CreateAssetFormProps) {
 									size={20}
 									className="text-base-content/25 mb-1"
 								/>
-								<span className="text-xs text-base-content/40">
+								<span className="text-xs text-bc-muted">
 									点击上传或拖拽图片
 								</span>
 							</div>
@@ -357,7 +357,7 @@ function AssetCard({
 					<h4 className="text-xs font-bold flex-1 truncate">{asset.name}</h4>
 				</div>
 				{asset.description && (
-					<p className="text-xs text-base-content/50 line-clamp-2">
+					<p className="text-xs text-bc-muted line-clamp-2">
 						{asset.description}
 					</p>
 				)}
@@ -368,7 +368,7 @@ function AssetCard({
 							<Button
 								variant="ghost"
 								size="sm"
-								className="!px-1.5 !py-0 !min-h-0 !h-5 text-xs text-primary hover:text-primary-focus"
+								className="!px-1.5 !py-0 !min-h-0 !h-5 text-xs text-primary-ink hover:opacity-80"
 								onClick={() => onUse(asset)}
 								disabled={isUsing}
 								title="添加到当前项目"
@@ -455,7 +455,7 @@ export function AssetDrawer({ open, onClose, projectId }: AssetDrawerProps) {
 						<Button
 							variant="ghost"
 							size="sm"
-							className="!h-7 !min-h-7 !px-1 text-primary hover:text-primary-focus"
+							className="!h-7 !min-h-7 !px-1 text-primary-ink hover:opacity-80"
 							onClick={() => setShowCreateForm(true)}
 							title="新建资产"
 							aria-label="新建资产"
@@ -480,8 +480,8 @@ export function AssetDrawer({ open, onClose, projectId }: AssetDrawerProps) {
 							key={tab.key}
 							className={`flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium transition-colors border-b-2 -mb-[2px] ${
 								activeTab === tab.key
-									? "border-primary text-primary"
-									: "border-transparent text-base-content/50 hover:text-base-content/80"
+									? "border-primary text-primary-ink"
+									: "border-transparent text-bc-muted hover:text-base-content/80"
 							}`}
 							onClick={() => setActiveTab(tab.key)}
 						>
@@ -512,7 +512,7 @@ export function AssetDrawer({ open, onClose, projectId }: AssetDrawerProps) {
 							<span className="loading loading-spinner loading-sm text-primary" />
 						</div>
 					) : items.length === 0 ? (
-						<div className="text-center text-xs text-base-content/40 py-8">
+						<div className="text-center text-xs text-bc-muted py-8">
 							<SvgIcon
 								name="layers"
 								size={24}
@@ -523,7 +523,7 @@ export function AssetDrawer({ open, onClose, projectId }: AssetDrawerProps) {
 							) : (
 								<>
 									<p>还没有保存的资产</p>
-									<p className="text-base-content/25 mt-1">
+									<p className="text-bc-subtle mt-1">
 										点击{" "}
 										<SvgIcon name="plus" size={10} className="inline" />{" "}
 										新建，或在画布角色卡片点击{" "}

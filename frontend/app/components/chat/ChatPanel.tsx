@@ -159,7 +159,7 @@ export function ChatPanel({
 
       {isGenerating && !awaitingConfirm && (
         <div className="flex items-center justify-between border-b border-base-content/10 px-2 py-0.5">
-          <div className="flex items-center gap-1.5 text-[length:var(--text-2xs)] text-base-content/50">
+          <div className="flex items-center gap-1.5 text-[length:var(--text-2xs)] text-bc-muted">
             <span className="loading loading-dots loading-xs text-primary" />
             {agentNameMap[currentAgent || ""] || currentAgent || "处理中"}…
             {isYolo && (
@@ -189,7 +189,7 @@ export function ChatPanel({
             <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full border-2 border-primary/30 bg-primary/10">
               <StageIcon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
             </div>
-            <p className="m-0 text-[length:var(--text-2xs)] text-base-content/50">
+            <p className="m-0 text-[length:var(--text-2xs)] text-bc-muted">
               当前阶段暂无对话
             </p>
           </div>
@@ -218,7 +218,7 @@ export function ChatPanel({
       {showManualConfirm && !showOutlinePreview && (
         <div className="border-t-2 border-primary/30 bg-primary/5 px-2 py-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate text-[length:var(--text-2xs)] font-medium text-base-content/60">
+            <span className="min-w-0 truncate text-[length:var(--text-2xs)] font-medium text-bc-muted">
               {agentDisplayName} 已完成 — 确认继续？
             </span>
             <Button
@@ -239,7 +239,7 @@ export function ChatPanel({
       )}
 
       {awaitingConfirm && isYolo && isPaused && onPause && (
-        <div className="flex items-center gap-1.5 border-t border-base-content/10 bg-primary/5 px-2 py-0.5 text-[length:var(--text-2xs)] text-base-content/50">
+        <div className="flex items-center gap-1.5 border-t border-base-content/10 bg-primary/5 px-2 py-0.5 text-[length:var(--text-2xs)] text-bc-muted">
           <BoltIcon className="h-3.5 w-3.5" aria-hidden="true" />
           快速生成已暂停
           <Button

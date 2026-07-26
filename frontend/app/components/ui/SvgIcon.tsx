@@ -105,7 +105,7 @@ export function SvgIcon({ name, className, size = 16 }: SvgIconProps) {
           stroke="currentColor"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth={2}
+          strokeWidth={1.5}
           d={d}
         />
       ))}

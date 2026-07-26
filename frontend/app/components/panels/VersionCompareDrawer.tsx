@@ -65,7 +65,7 @@ function VersionColumn({ title, version }: { title: string; version?: ArtifactVe
 				{imageUrl ? (
 					<img src={imageUrl} alt={title} className="h-full w-full object-cover" />
 				) : (
-					<div className="flex h-full items-center justify-center text-[length:var(--text-2xs)] text-base-content/45">
+					<div className="flex h-full items-center justify-center text-[length:var(--text-2xs)] text-bc-muted">
 						图片不存在或未生成
 					</div>
 				)}
@@ -76,7 +76,7 @@ function VersionColumn({ title, version }: { title: string; version?: ArtifactVe
 					if (value === undefined || value === null || value === "") return null;
 					return (
 						<div key={field} className="text-[length:var(--text-2xs)]">
-							<div className="font-semibold text-base-content/60">{LABELS[field] || field}</div>
+							<div className="font-semibold text-bc-muted">{LABELS[field] || field}</div>
 							<div className="whitespace-pre-wrap break-words">{valueToText(value)}</div>
 						</div>
 					);
@@ -224,12 +224,12 @@ export function VersionCompareDrawer({
 				</div>
 
 				{versionsQuery.isLoading && (
-					<div className="text-[length:var(--text-xs)] text-base-content/60">
+					<div className="text-[length:var(--text-xs)] text-bc-muted">
 						加载版本中...
 					</div>
 				)}
 				{!versionsQuery.isLoading && versions.length === 0 && (
-					<div className="rounded-[var(--radius-md)] border border-base-content/10 p-4 text-[length:var(--text-xs)] text-base-content/60">
+					<div className="rounded-[var(--radius-md)] border border-base-content/10 p-4 text-[length:var(--text-xs)] text-bc-muted">
 						暂无版本快照。生成或重新生成后会自动记录。
 					</div>
 				)}
@@ -267,12 +267,12 @@ export function VersionCompareDrawer({
 								差异
 							</h3>
 							{compareQuery.isLoading && (
-								<div className="text-[length:var(--text-2xs)] text-base-content/60">
+								<div className="text-[length:var(--text-2xs)] text-bc-muted">
 									计算差异中...
 								</div>
 							)}
 							{!compareQuery.isLoading && (compareQuery.data?.diffs.length ?? 0) === 0 && (
-								<div className="text-[length:var(--text-2xs)] text-base-content/60">
+								<div className="text-[length:var(--text-2xs)] text-bc-muted">
 									两个版本内容相同。
 								</div>
 							)}

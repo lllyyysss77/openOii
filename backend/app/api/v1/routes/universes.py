@@ -385,7 +385,15 @@ async def import_character_to_project(
     shared_character_id: int,
     session: AsyncSession = SessionDep,
 ):
-    await get_or_404(session, Project, project_id)
+    project = await get_or_404(session, Project, project_id)
+    shared_char = await get_or_404(session, SharedCharacter, shared_character_id)
+
+    # 防止跨宇宙静默覆盖：目标项目必须属于该共享角色所在宇宙
+    if project.universe_id != shared_char.universe_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Project does not belong to this universe",
+        )
 
     svc = UniverseService(session)
     character = await svc.import_shared_character_to_project(

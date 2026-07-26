@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { universesApi } from "~/services/api";
 import { UniverseCard } from "~/components/universe/UniverseCard";
 import { Button } from "~/components/ui/Button";
-import { Card } from "~/components/ui/Card";
+import { EmptyState } from "~/components/ui/EmptyState";
+import { DeskSection } from "~/components/layout/DeskSection";
 import { Input } from "~/components/ui/Input";
 import { Modal } from "~/components/ui/Modal";
 import { ConfirmModal } from "~/components/ui/ConfirmModal";
@@ -25,7 +26,7 @@ export function UniversesPage() {
 		style_rules: "",
 	});
 
-	const { data: universes = [], isLoading } = useQuery({
+	const { data: universes = [], isLoading, isError } = useQuery({
 		queryKey: ["universes"],
 		queryFn: () => universesApi.list(),
 	});
@@ -97,41 +98,65 @@ export function UniversesPage() {
 				/>
 
 
-				{isLoading && (
-					<div className="flex items-center justify-center py-12">
-						<span
-							className="loading loading-spinner loading-md text-primary"
-							aria-label="加载中"
-						/>
-					</div>
-				)}
+				<DeskSection
+					title="全部宇宙"
+					icon={<GlobeAltIcon className="h-4 w-4" aria-hidden="true" />}
+					meta={isLoading || isError ? undefined : `${universes.length} 个`}
+				>
+					{isLoading && (
+						<div className="flex items-center justify-center py-8">
+							<span
+								className="loading loading-spinner loading-md text-primary"
+								aria-label="加载中"
+							/>
+						</div>
+					)}
 
-				{!isLoading && universes.length === 0 && (
-					<Card className="py-10 text-center">
-						<GlobeAltIcon
-							className="mx-auto mb-3 h-10 w-10 text-primary/70"
-							aria-hidden="true"
-						/>
-						<h2 className="mb-1 font-heading text-[length:var(--text-lg)] font-bold">
-							还没有 IP 宇宙
-						</h2>
-						<p className="mb-4 text-[length:var(--text-sm)] text-base-content/60">
-							创建第一个宇宙，开始跨项目故事
-						</p>
-						<Button size="sm" onClick={() => setShowCreate(true)}>
-							<PlusIcon className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-							创建第一个宇宙
-						</Button>
-					</Card>
-				)}
+					{/* 服务故障时不渲染空态，避免把加载失败说成「还没有数据」 */}
+					{!isLoading && isError && (
+						<div className="flex min-h-[10rem] flex-col items-center justify-center gap-3 rounded-[var(--radius-lg)] border-2 border-error/25 bg-error/5 px-3 text-center">
+							<div>
+								<p className="m-0 font-heading text-[length:var(--text-md)] font-bold text-error">
+									宇宙列表加载失败
+								</p>
+								<p className="m-0 mt-0.5 text-[length:var(--text-xs)] text-bc-muted">
+									服务暂时不可用，数据还在，稍后重试
+								</p>
+							</div>
+							<Button
+								size="sm"
+								onClick={() =>
+									queryClient.invalidateQueries({ queryKey: ["universes"] })
+								}
+							>
+								重试
+							</Button>
+						</div>
+					)}
 
-				{!isLoading && universes.length > 0 && (
-					<div className="grid grid-cols-1 gap-[var(--space-3)] sm:grid-cols-2 lg:grid-cols-3">
-						{universes.map((u) => (
-							<UniverseCard key={u.id} universe={u} onDelete={setDeleteTarget} />
-						))}
-					</div>
-				)}
+					{!isLoading && !isError && universes.length === 0 && (
+						<EmptyState
+							compact
+							icon={<GlobeAltIcon className="h-8 w-8" aria-hidden="true" />}
+							title="还没有 IP 宇宙"
+							description="创建第一个宇宙，开始跨项目故事"
+							action={
+								<Button size="sm" onClick={() => setShowCreate(true)}>
+									<PlusIcon className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+									创建第一个宇宙
+								</Button>
+							}
+						/>
+					)}
+
+					{!isLoading && !isError && universes.length > 0 && (
+						<div className="grid grid-cols-1 gap-[var(--rhythm-block)] sm:grid-cols-2 lg:grid-cols-3">
+							{universes.map((u) => (
+								<UniverseCard key={u.id} universe={u} onDelete={setDeleteTarget} />
+							))}
+						</div>
+					)}
+				</DeskSection>
 				</PageContent>
 			</PageBody>
 

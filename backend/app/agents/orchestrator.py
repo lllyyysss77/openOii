@@ -17,6 +17,7 @@ from app.agents.compose import ComposeAgent
 from app.agents.review_rules import ReviewAgent
 from app.config import Settings
 from app.models.agent_run import AgentMessage, AgentRun
+from app.models.message import Message
 from app.models.project import Character, Project, Shot
 from app.schemas.project import GenerateRequest
 from app.orchestration.driver import drive_graph_until_idle, gate_name_from_interrupt
@@ -430,6 +431,19 @@ class GenerationOrchestrator:
                 run_id, agent="orchestrator", role="system", content=f"{context} failed: {error!r}"
             )
             await self._set_run(run, status="failed", error=str(error))
+
+            # 项目级错误消息：页面加载查的是 Message 表而非 run 级 AgentMessage，
+            # 落一条 role=error 让失败原因在刷新后依然可见（MessageList 已有渲染分支）
+            self.session.add(
+                Message(
+                    project_id=project_id,
+                    run_id=run_id,
+                    agent="orchestrator",
+                    role="error",
+                    content=f"生成失败：{error}",
+                )
+            )
+            await self.session.commit()
 
             project = await self.session.get(Project, project_id)
             if project is not None:

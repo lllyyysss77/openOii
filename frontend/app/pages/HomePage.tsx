@@ -3,7 +3,6 @@ import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { projectsApi, universesApi } from "~/services/api";
 import { Button } from "~/components/ui/Button";
-import { Card } from "~/components/ui/Card";
 import {
 	ChevronDownIcon,
 	ChevronUpIcon,
@@ -11,10 +10,14 @@ import {
 } from "@heroicons/react/24/outline";
 import { TopBar } from "~/components/layout/TopBar";
 import { PageBody, PageShell } from "~/components/layout/PageShell";
-import { PageContent } from "~/components/layout/PageHeader";
+import { PageContent, PageHeader } from "~/components/layout/PageHeader";
+import { DeskSection } from "~/components/layout/DeskSection";
 import { SkillWall } from "~/components/home/SkillWall";
 import { SvgIcon } from "~/components/ui/SvgIcon";
-import type { SkillPreset } from "~/features/skills/skillCatalog";
+import {
+	getSkillById,
+	type SkillPreset,
+} from "~/features/skills/skillCatalog";
 
 const AssetDrawer = lazy(() =>
 	import("~/components/panels/AssetDrawer").then((m) => ({
@@ -90,7 +93,33 @@ export function HomePage() {
 	const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 	const [assetsOpen, setAssetsOpen] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
-	const [activeSkillId, setActiveSkillId] = useState<string | null>("story-anime");
+	// 记住上次使用的工作流：回访用户不必每次重新决策
+	const [lastUsedSkillId] = useState<string | null>(() => {
+		try {
+			return localStorage.getItem("openoii-last-skill");
+		} catch {
+			return null;
+		}
+	});
+	const [activeSkillId, setActiveSkillId] = useState<string | null>(
+		lastUsedSkillId || "story-anime",
+	);
+
+	// 记忆恢复必须连同预填一起生效，否则「已预填」徽章与实际参数不一致
+	const lastUsedAppliedRef = useRef(false);
+	useEffect(() => {
+		if (lastUsedAppliedRef.current) return;
+		lastUsedAppliedRef.current = true;
+		if (!lastUsedSkillId || lastUsedSkillId === "story-anime") return;
+		const skill = getSkillById(lastUsedSkillId);
+		if (!skill) return;
+		if (skill.prefill.style) setStyle(skill.prefill.style);
+		if (skill.prefill.creationMode) setCreationMode(skill.prefill.creationMode);
+		if (skill.prefill.placeholder) setStoryPlaceholder(skill.prefill.placeholder);
+		if (skill.prefill.targetShotCount != null) {
+			setShotCount(skill.prefill.targetShotCount);
+		}
+	}, [lastUsedSkillId]);
 	const [storyPlaceholder, setStoryPlaceholder] = useState(
 		"主角、冲突、关键画面、情绪基调。",
 	);
@@ -263,6 +292,11 @@ export function HomePage() {
 
 	const handleSkillSelect = useCallback((skill: SkillPreset) => {
 		setActiveSkillId(skill.id);
+		try {
+			localStorage.setItem("openoii-last-skill", skill.id);
+		} catch {
+			// 隐私模式等场景下静默降级
+		}
 		if (skill.prefill.style) setStyle(skill.prefill.style);
 		if (skill.prefill.creationMode) setCreationMode(skill.prefill.creationMode);
 		if (skill.prefill.placeholder) setStoryPlaceholder(skill.prefill.placeholder);
@@ -291,7 +325,7 @@ export function HomePage() {
 		`touch-target-dense rounded-[var(--radius-md)] border-2 px-2 py-1.5 text-[length:var(--text-xs)] font-bold transition-colors duration-[var(--duration-fast)] ${
 			active
 				? "border-primary bg-primary text-primary-content"
-				: "border-base-content/15 bg-base-100 text-base-content/70 hover:border-primary/40"
+				: "border-base-content/15 bg-base-100 text-bc-muted hover:border-primary/40"
 		}`;
 	const metaChip =
 		"rounded-full border border-base-content/10 bg-base-200 px-2 py-0.5 text-[length:var(--text-2xs)] font-semibold text-base-content/75";
@@ -321,89 +355,78 @@ export function HomePage() {
 				</Suspense>
 			)}
 			<PageBody className="workbench-surface">
-				<PageContent className="sm:py-[var(--space-4)]">
-					<div className="flex flex-wrap items-center justify-between gap-2">
-						<div className="min-w-0">
-							<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/55">
-								create desk
-							</p>
-							<h1 className="m-0 mt-0.5 font-heading text-[length:var(--text-xl)] font-bold leading-tight">
-								创作台
-							</h1>
-							<p className="m-0 mt-1 text-[length:var(--text-sm)] text-base-content/65">
-								选工作流，写一句话开工
-							</p>
-						</div>
-						<div className="flex flex-wrap gap-1" aria-label="创作台工具">
-							<button
-								type="button"
-								className={`${navChip} ${
-									historyOpen ? "bg-primary text-primary-content" : "text-base-content/65"
-								}`}
-								onClick={() => setHistoryOpen((v) => !v)}
-								aria-pressed={historyOpen}
-							>
-								<SvgIcon name="clock-3" size={14} />
-								历史
-							</button>
-							<button
-								type="button"
-								className={`${navChip} ${
-									assetsOpen ? "bg-primary text-primary-content" : "text-base-content/65"
-								}`}
-								onClick={() => setAssetsOpen((v) => !v)}
-								aria-pressed={assetsOpen}
-							>
-								<SvgIcon name="archive" size={14} />
-								资产
-							</button>
-						</div>
-					</div>
+				<PageContent className="min-h-full sm:py-[var(--space-4)]">
+					<PageHeader
+						eyebrow="create desk"
+						title="创作台"
+						description="选工作流，写一句话开工"
+						actionsAlign="title"
+						actions={
+							<div className="flex flex-wrap gap-1" aria-label="创作台工具">
+								<button
+									type="button"
+									className={`${navChip} ${
+										historyOpen ? "bg-primary text-primary-content" : "text-bc-muted"
+									}`}
+									onClick={() => setHistoryOpen((v) => !v)}
+									aria-pressed={historyOpen}
+								>
+									<SvgIcon name="clock-3" size={14} />
+									历史
+								</button>
+								<button
+									type="button"
+									className={`${navChip} ${
+										assetsOpen ? "bg-primary text-primary-content" : "text-bc-muted"
+									}`}
+									onClick={() => setAssetsOpen((v) => !v)}
+									aria-pressed={assetsOpen}
+								>
+									<SvgIcon name="archive" size={14} />
+									资产
+								</button>
+							</div>
+						}
+					/>
 
-					<Card
-						className="card-comic animate-draw-in w-full overflow-hidden !p-0"
+					{/* 桌面双栏：左侧纸面（工作流 + 故事创意），右侧 linen 面板。flex-1 让内容吃满视口，不留半屏空白 */}
+					<div
+						className="grid min-h-0 flex-1 gap-[var(--rhythm-zone)] lg:grid-cols-[minmax(0,1fr)_14rem]"
 						data-shell="create-desk"
 					>
-						<div className="flex flex-wrap items-center justify-between gap-2 border-b border-base-content/10 bg-base-200/30 px-[var(--space-3)] py-1.5">
-							<div className="min-w-0">
-								<h2 className="m-0 font-heading text-[length:var(--text-md)] font-bold">
-										开工配置
-									</h2>
-									<p className="m-0 text-[length:var(--text-2xs)] text-base-content/50">
-										技能、风格与分镜参数
-								</p>
-							</div>
-							{activeSkillId ? (
-								<span className="rounded border border-primary/25 bg-primary/10 px-1.5 py-px font-mono text-[length:var(--text-2xs)] font-bold text-primary">
-									{activeSkillId}
-								</span>
-							) : null}
-						</div>
-						<div className="border-b border-base-content/10 bg-base-100/60 px-[var(--space-3)] py-2">
-							<SkillWall
-								embedded
-								activeSkillId={activeSkillId}
-								onSelect={handleSkillSelect}
-							/>
-						</div>
-						<div className="grid lg:grid-cols-[minmax(0,1fr)_14rem]">
-							<section className="min-w-0 p-[var(--space-3)]">
-								<div onPaste={handlePaste}>
-									<div className="mb-1.5 flex items-center justify-between gap-2">
-										<label
-											htmlFor="story-input"
-											className="font-heading text-[length:var(--text-md)] font-bold"
-										>
-											故事创意
-										</label>
-										<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/60">
-											{story.length}/5000
+						<div className="flex min-w-0 flex-col gap-[var(--rhythm-zone)]">
+							<DeskSection
+								icon={<SvgIcon name="zap" size={16} />}
+								title="工作流"
+								actions={
+									activeSkillId ? (
+										// 预填透明化：选工作流会静默改右侧参数，这里让改动可见
+										<span className="rounded border border-primary/25 bg-primary/10 px-1.5 py-px text-[length:var(--text-2xs)] font-bold text-primary-ink">
+											已预填 {creationModeLabel} · {selectedStyleLabel} ·{" "}
+											{shotCount ?? "自动"}镜
 										</span>
-									</div>
+									) : null
+								}
+							>
+								<SkillWall
+									activeSkillId={activeSkillId}
+									onSelect={handleSkillSelect}
+									lastUsedId={lastUsedSkillId}
+								/>
+							</DeskSection>
+
+							<DeskSection
+								icon={<SvgIcon name="pencil" size={16} />}
+								title="故事创意"
+								meta={`${story.length}/5000`}
+								className="min-h-0 flex-1"
+							>
+								{/* flex-1 min-h-0：textarea 吃掉剩余视口高度（textarea 是「你写字的纸」，保留 doodle 边框） */}
+								<div className="flex min-h-0 flex-1 flex-col" onPaste={handlePaste}>
 									<textarea
 										id="story-input"
 										ref={storyInputRef}
-										className="input-doodle w-full min-h-24 resize-none bg-base-100/85 p-2.5 text-[length:var(--text-sm)] leading-[var(--leading-normal)] sm:min-h-32"
+										className="input-doodle min-h-24 w-full flex-1 resize-y bg-base-100/85 p-2.5 text-[length:var(--text-sm)] leading-[var(--leading-normal)] sm:min-h-32"
 										placeholder={storyPlaceholder}
 										value={story}
 										onChange={(e) => setStory(e.target.value)}
@@ -425,7 +448,7 @@ export function HomePage() {
 									)}
 								</div>
 
-								<div className="mt-3 flex flex-col gap-2 border-t border-base-content/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+								<div className="flex flex-col gap-[var(--rhythm-item)] sm:flex-row sm:items-center sm:justify-between">
 									<div className="flex min-w-0 flex-wrap gap-1.5">
 										<span className={metaChip}>{selectedStyleLabel}</span>
 										<span className={metaChip}>{creationModeLabel}</span>
@@ -440,7 +463,7 @@ export function HomePage() {
 											</span>
 										)}
 										{selectedUniverse && (
-											<span className={`${metaChip} border-primary/30 bg-primary/10 text-primary`}>
+											<span className={`${metaChip} border-primary/30 bg-primary/10 text-primary-ink`}>
 												{selectedUniverse.name} · 第 {nextChapterNumber} 章
 											</span>
 										)}
@@ -459,293 +482,294 @@ export function HomePage() {
 										生成并进入画布
 									</Button>
 								</div>
-							</section>
+							</DeskSection>
+						</div>
 
-							<aside
-								className="border-t border-base-content/10 bg-base-200/40 p-[var(--space-3)] lg:border-l lg:border-t-0"
-								aria-label="创作设置"
-							>
-								<div className="space-y-2.5">
-									<section aria-labelledby="universe-heading">
-										<div className="mb-1 flex items-center justify-between gap-2">
-											<h2 id="universe-heading" className={sectionLabel}>
-												IP 宇宙
-											</h2>
-											<Link
-												to="/universes"
-												className="text-[length:var(--text-2xs)] font-bold text-base-content/55 transition-colors hover:text-primary"
-											>
-												管理
-											</Link>
-										</div>
-										<select
-											id="home-universe-select"
-											name="universe_id"
-											className="select select-bordered h-9 min-h-9 w-full bg-base-100 text-[length:var(--text-sm)] font-semibold"
-											value={selectedUniverseId ?? ""}
-											onChange={(event) => {
-												const value = event.target.value;
-												setSelectedUniverseId(value ? Number(value) : null);
-											}}
-											disabled={universesLoading}
-											aria-label="选择 IP 宇宙"
+						{/* linen 面板：无 brutal 阴影，靠材质（底色）与左侧纸面区分，不做双卡并置 */}
+						<aside
+							className="min-w-0 self-start rounded-[var(--radius-lg)] bg-base-200 p-3"
+							aria-label="创作设置"
+						>
+							<div className="flex flex-col gap-[var(--rhythm-block)]">
+								<section aria-labelledby="universe-heading">
+									<div className="mb-1 flex items-center justify-between gap-2">
+										<h2 id="universe-heading" className={sectionLabel}>
+											IP 宇宙
+										</h2>
+										<Link
+											to="/universes"
+											className="text-[length:var(--text-2xs)] font-bold text-bc-muted transition-colors hover:text-primary-ink"
 										>
-											<option value="">
-												{universesLoading ? "加载宇宙…" : "独立项目"}
-											</option>
-											{universes.map((universe) => (
-												<option key={universe.id} value={universe.id}>
-													{universe.name}
-												</option>
-											))}
-										</select>
-										<p className="m-0 mt-1 text-[length:var(--text-2xs)] leading-snug text-base-content/55">
-											{selectedUniverse
-												? `第 ${nextChapterNumber} 章 · 沿用世界观与共享角色`
-												: "不选则独立项目"}
-										</p>
-									</section>
-
-									<section aria-labelledby="mode-heading">
-										<h2 id="mode-heading" className={`${sectionLabel} mb-1`}>
-											生成方式
-										</h2>
-										<div className="grid grid-cols-2 gap-1.5">
-											{[
-												{ value: "review", label: "审阅", icon: "check" },
-												{ value: "quick", label: "快速", icon: "zap" },
-											].map((mode) => (
-												<button
-													key={mode.value}
-													type="button"
-													className={settingChip(creationMode === mode.value)}
-													onClick={() =>
-														setCreationMode(mode.value as "review" | "quick")
-													}
-													aria-pressed={creationMode === mode.value}
-												>
-													<span className="inline-flex items-center justify-center gap-1">
-														<SvgIcon name={mode.icon as "check" | "zap"} size={14} />
-														{mode.label}
-													</span>
-												</button>
-											))}
-										</div>
-									</section>
-
-									<section aria-labelledby="style-heading">
-										<h2 id="style-heading" className={`${sectionLabel} mb-1`}>
-											常用风格
-										</h2>
-										<div className="grid grid-cols-2 gap-1.5">
-											{PRIMARY_STYLE_OPTIONS.map((opt) => (
-												<button
-													key={opt.value}
-													type="button"
-													className={settingChip(style === opt.value)}
-													onClick={() => setStyle(opt.value)}
-													aria-pressed={style === opt.value}
-												>
-													{opt.label}
-												</button>
-											))}
-										</div>
-									</section>
-
-									<section aria-labelledby="reference-heading">
-										<div className="mb-1 flex items-center justify-between gap-2">
-											<h2 id="reference-heading" className={sectionLabel}>
-												参考图
-											</h2>
-											<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/60">
-												{referenceImages.length}/7
-											</span>
-										</div>
-										{referenceImages.length > 0 ? (
-											<div className="flex flex-wrap gap-1.5">
-												{referenceImages.map((img, i) => (
-													<div
-														key={i}
-														className="group relative h-11 w-11 overflow-hidden rounded-[var(--radius-md)] border-2 border-base-content/10"
-													>
-														<img
-															src={img}
-															alt={`参考图 ${i + 1}`}
-															className="h-full w-full object-cover"
-															width={44}
-															height={44}
-														/>
-														<button
-															type="button"
-															className="absolute inset-0 flex items-center justify-center bg-error/60 opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100 focus:opacity-100"
-															onClick={() => removeReferenceImage(i)}
-															aria-label={`删除参考图 ${i + 1}`}
-														>
-															<SvgIcon
-																name="x"
-																size={16}
-																className="text-error-content"
-															/>
-														</button>
-													</div>
-												))}
-												{referenceImages.length < 7 && (
-													<button
-														type="button"
-														className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border-2 border-dashed border-base-content/20 text-base-content/70 transition-colors hover:border-primary/50 hover:text-primary"
-														onClick={() => fileInputRef.current?.click()}
-														aria-label="添加参考图"
-													>
-														<SvgIcon name="plus" size={16} />
-													</button>
-												)}
-											</div>
-										) : (
-											<button
-												type="button"
-												className="touch-target-dense inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-md)] border-2 border-dashed border-base-content/20 bg-base-100/70 px-2 py-1.5 text-[length:var(--text-xs)] font-semibold text-base-content/70 transition-colors hover:border-primary/50 hover:text-primary"
-												onClick={() => fileInputRef.current?.click()}
-											>
-												<SvgIcon name="image" size={14} />
-												添加参考图
-											</button>
-										)}
-										<input
-											ref={fileInputRef}
-											id="reference-images"
-											name="reference_images"
-											type="file"
-											accept="image/*"
-											multiple
-											className="hidden"
-											onChange={(e) => {
-												handleImageUpload(e.target.files);
-												e.target.value = "";
-											}}
-										/>
-									</section>
-
-									<button
-										type="button"
-										className="touch-target-dense flex w-full items-center justify-between rounded-[var(--radius-md)] border border-base-content/10 bg-base-100 px-2 text-[length:var(--text-xs)] font-bold text-base-content/70 transition-colors hover:border-primary/40 hover:text-primary"
-										onClick={() => setShowAdvanced(!showAdvanced)}
-										aria-expanded={showAdvanced}
+											管理
+										</Link>
+									</div>
+									<select
+										id="home-universe-select"
+										name="universe_id"
+										className="select select-bordered h-9 min-h-9 w-full bg-base-100 text-[length:var(--text-sm)] font-semibold"
+										value={selectedUniverseId ?? ""}
+										onChange={(event) => {
+											const value = event.target.value;
+											setSelectedUniverseId(value ? Number(value) : null);
+										}}
+										disabled={universesLoading}
+										aria-label="选择 IP 宇宙"
 									>
-										<span>更多设置</span>
-										{showAdvanced ? (
-											<ChevronUpIcon className="h-3.5 w-3.5" aria-hidden="true" />
-										) : (
-											<ChevronDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
-										)}
-									</button>
+										<option value="">
+											{universesLoading ? "加载宇宙…" : "独立项目"}
+										</option>
+										{universes.map((universe) => (
+											<option key={universe.id} value={universe.id}>
+												{universe.name}
+											</option>
+										))}
+									</select>
+									<p className="m-0 mt-1 text-[length:var(--text-2xs)] leading-snug text-bc-muted">
+										{selectedUniverse
+											? `第 ${nextChapterNumber} 章 · 沿用世界观与共享角色`
+											: "不选则独立项目"}
+									</p>
+								</section>
 
-									{showAdvanced && (
-										<div className="space-y-2 border-t border-base-content/10 pt-2">
-											<label className="form-control">
-												<span className="label px-0 py-0 pb-0.5">
-													<span className="label-text font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60">
-														完整风格
-													</span>
+								<section aria-labelledby="mode-heading">
+									<h2 id="mode-heading" className={`${sectionLabel} mb-1`}>
+										生成方式
+									</h2>
+									<div className="grid grid-cols-2 gap-[var(--rhythm-item)]">
+										{[
+											{ value: "review", label: "审阅", icon: "check" },
+											{ value: "quick", label: "快速", icon: "zap" },
+										].map((mode) => (
+											<button
+												key={mode.value}
+												type="button"
+												className={settingChip(creationMode === mode.value)}
+												onClick={() =>
+													setCreationMode(mode.value as "review" | "quick")
+												}
+												aria-pressed={creationMode === mode.value}
+											>
+												<span className="inline-flex items-center justify-center gap-1">
+													<SvgIcon name={mode.icon as "check" | "zap"} size={14} />
+													{mode.label}
 												</span>
-												<select
-													className="select select-bordered h-9 min-h-9 bg-base-100 text-[length:var(--text-sm)] font-semibold"
-													value={style}
-													onChange={(event) => setStyle(event.target.value)}
-													aria-label="完整风格"
+											</button>
+										))}
+									</div>
+								</section>
+
+								<section aria-labelledby="style-heading">
+									<h2 id="style-heading" className={`${sectionLabel} mb-1`}>
+										常用风格
+									</h2>
+									<div className="grid grid-cols-2 gap-[var(--rhythm-item)]">
+										{PRIMARY_STYLE_OPTIONS.map((opt) => (
+											<button
+												key={opt.value}
+												type="button"
+												className={settingChip(style === opt.value)}
+												onClick={() => setStyle(opt.value)}
+												aria-pressed={style === opt.value}
+											>
+												{opt.label}
+											</button>
+										))}
+									</div>
+								</section>
+
+								<section aria-labelledby="reference-heading">
+									<div className="mb-1 flex items-center justify-between gap-2">
+										<h2 id="reference-heading" className={sectionLabel}>
+											参考图
+										</h2>
+										<span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-bc-muted">
+											{referenceImages.length}/7
+										</span>
+									</div>
+									{referenceImages.length > 0 ? (
+										<div className="flex flex-wrap gap-1.5">
+											{referenceImages.map((img, i) => (
+												<div
+													key={i}
+													className="group relative h-11 w-11 overflow-hidden rounded-[var(--radius-md)] border-2 border-base-content/10"
 												>
-													{STYLE_CATEGORIES.map((category) => (
-														<optgroup key={category.group} label={category.group}>
-															{category.styles.map((opt) => (
-																<option key={opt.value} value={opt.value}>
-																	{opt.label}
-																</option>
-															))}
-														</optgroup>
-													))}
-												</select>
-											</label>
-
-											<label className="form-control">
-												<span className="label px-0 py-0 pb-0.5">
-													<span className="label-text font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60">
-														镜头数
-													</span>
-												</span>
-												<div className="flex items-center gap-1.5">
-													<input
-														id="shot-count"
-														type="number"
-														min={1}
-														max={20}
-														value={shotCount ?? ""}
-														placeholder="自动"
-														onChange={(e) =>
-															setShotCount(
-																e.target.value ? Number(e.target.value) : undefined,
-															)
-														}
-														className="input input-bordered h-9 min-h-9 flex-1 bg-base-100 text-[length:var(--text-sm)] font-semibold"
-														aria-label="镜头数"
-														autoComplete="off"
+													<img
+														src={img}
+														alt={`参考图 ${i + 1}`}
+														className="h-full w-full object-cover"
+														width={44}
+														height={44}
 													/>
 													<button
 														type="button"
-														className="btn btn-ghost h-9 min-h-9 px-2 text-[length:var(--text-2xs)]"
-														onClick={() => setShotCount(undefined)}
+														className="absolute inset-0 flex items-center justify-center bg-error/60 opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100 focus:opacity-100"
+														onClick={() => removeReferenceImage(i)}
+														aria-label={`删除参考图 ${i + 1}`}
 													>
-														自动
+														<SvgIcon
+															name="x"
+															size={16}
+															className="text-error-content"
+														/>
 													</button>
 												</div>
-											</label>
+											))}
+											{referenceImages.length < 7 && (
+												<button
+													type="button"
+													className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border-2 border-dashed border-base-content/20 text-bc-muted transition-colors hover:border-primary/50 hover:text-primary-ink"
+													onClick={() => fileInputRef.current?.click()}
+													aria-label="添加参考图"
+												>
+													<SvgIcon name="plus" size={16} />
+												</button>
+											)}
+										</div>
+									) : (
+										<button
+											type="button"
+											className="touch-target-dense inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-md)] border-2 border-dashed border-base-content/20 bg-base-100/70 px-2 py-1.5 text-[length:var(--text-xs)] font-semibold text-bc-muted transition-colors hover:border-primary/50 hover:text-primary-ink"
+											onClick={() => fileInputRef.current?.click()}
+										>
+											<SvgIcon name="image" size={14} />
+											添加参考图
+										</button>
+									)}
+									<input
+										ref={fileInputRef}
+										id="reference-images"
+										name="reference_images"
+										type="file"
+										accept="image/*"
+										multiple
+										className="hidden"
+										onChange={(e) => {
+											handleImageUpload(e.target.files);
+											e.target.value = "";
+										}}
+									/>
+								</section>
 
-											<div>
-												<div className="mb-1 flex items-center justify-between gap-2">
-													<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/60">
-														角色提示
-													</p>
-													{characterHints.length < 6 ? (
-														<button
-															type="button"
-															className="btn btn-ghost btn-sm h-8 min-h-8 px-2 text-[length:var(--text-2xs)] text-base-content/70 hover:text-primary"
-															onClick={addCharacterHint}
-														>
-															添加
-														</button>
-													) : null}
-												</div>
-												<div className="space-y-1.5">
-													{characterHints.map((hint, i) => (
-														<div key={i} className="flex gap-1.5">
-															<input
-																type="text"
-																className="input input-bordered input-sm h-8 min-h-8 min-w-0 flex-1 bg-base-100 text-[length:var(--text-sm)]"
-																placeholder={`角色 ${i + 1}`}
-																value={hint}
-																onChange={(e) =>
-																	updateCharacterHint(i, e.target.value)
-																}
-																autoComplete="off"
-															/>
-															{characterHints.length > 1 ? (
-																<button
-																	type="button"
-																	className="btn btn-ghost btn-sm btn-square h-8 min-h-8 text-error"
-																	onClick={() => removeCharacterHint(i)}
-																	aria-label={`删除角色 ${i + 1}`}
-																>
-																	<SvgIcon name="x" size={14} />
-																</button>
-															) : null}
-														</div>
-													))}
-												</div>
+								<button
+									type="button"
+									className="touch-target-dense flex w-full items-center justify-between rounded-[var(--radius-md)] border border-base-content/10 bg-base-100 px-2 text-[length:var(--text-xs)] font-bold text-bc-muted transition-colors hover:border-primary/40 hover:text-primary-ink"
+									onClick={() => setShowAdvanced(!showAdvanced)}
+									aria-expanded={showAdvanced}
+								>
+									<span>更多设置</span>
+									{showAdvanced ? (
+										<ChevronUpIcon className="h-3.5 w-3.5" aria-hidden="true" />
+									) : (
+										<ChevronDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
+									)}
+								</button>
+
+								{showAdvanced && (
+									<div className="flex flex-col gap-[var(--rhythm-item)] border-t border-base-content/10 pt-2">
+										<label className="form-control">
+											<span className="label px-0 py-0 pb-0.5">
+												<span className="label-text font-mono text-[length:var(--text-2xs)] uppercase text-bc-muted">
+													完整风格
+												</span>
+											</span>
+											<select
+												className="select select-bordered h-9 min-h-9 bg-base-100 text-[length:var(--text-sm)] font-semibold"
+												value={style}
+												onChange={(event) => setStyle(event.target.value)}
+												aria-label="完整风格"
+											>
+												{STYLE_CATEGORIES.map((category) => (
+													<optgroup key={category.group} label={category.group}>
+														{category.styles.map((opt) => (
+															<option key={opt.value} value={opt.value}>
+																{opt.label}
+															</option>
+														))}
+													</optgroup>
+												))}
+											</select>
+										</label>
+
+										<label className="form-control">
+											<span className="label px-0 py-0 pb-0.5">
+												<span className="label-text font-mono text-[length:var(--text-2xs)] uppercase text-bc-muted">
+													镜头数
+												</span>
+											</span>
+											<div className="flex items-center gap-1.5">
+												<input
+													id="shot-count"
+													type="number"
+													min={1}
+													max={20}
+													value={shotCount ?? ""}
+													placeholder="自动"
+													onChange={(e) =>
+														setShotCount(
+															e.target.value ? Number(e.target.value) : undefined,
+														)
+													}
+													className="input input-bordered h-9 min-h-9 flex-1 bg-base-100 text-[length:var(--text-sm)] font-semibold"
+													aria-label="镜头数"
+													autoComplete="off"
+												/>
+												<button
+													type="button"
+													className="btn btn-ghost h-9 min-h-9 px-2 text-[length:var(--text-2xs)]"
+													onClick={() => setShotCount(undefined)}
+												>
+													自动
+												</button>
+											</div>
+										</label>
+
+										<div>
+											<div className="mb-1 flex items-center justify-between gap-2">
+												<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-bc-muted">
+													角色提示
+												</p>
+												{characterHints.length < 6 ? (
+													<button
+														type="button"
+														className="btn btn-ghost btn-sm h-8 min-h-8 px-2 text-[length:var(--text-2xs)] text-bc-muted hover:text-primary-ink"
+														onClick={addCharacterHint}
+													>
+														添加
+													</button>
+												) : null}
+											</div>
+											<div className="flex flex-col gap-[var(--rhythm-item)]">
+												{characterHints.map((hint, i) => (
+													<div key={i} className="flex gap-1.5">
+														<input
+															type="text"
+															className="input input-bordered input-sm h-8 min-h-8 min-w-0 flex-1 bg-base-100 text-[length:var(--text-sm)]"
+															placeholder={`角色 ${i + 1}`}
+															value={hint}
+															onChange={(e) =>
+																updateCharacterHint(i, e.target.value)
+															}
+															autoComplete="off"
+														/>
+														{characterHints.length > 1 ? (
+															<button
+																type="button"
+																className="btn btn-ghost btn-sm btn-square h-8 min-h-8 text-error"
+																onClick={() => removeCharacterHint(i)}
+																aria-label={`删除角色 ${i + 1}`}
+															>
+																<SvgIcon name="x" size={14} />
+															</button>
+														) : null}
+													</div>
+												))}
 											</div>
 										</div>
-									)}
-								</div>
-							</aside>
-						</div>
-					</Card>
+									</div>
+								)}
+							</div>
+						</aside>
+					</div>
 				</PageContent>
 			</PageBody>
 			</div>

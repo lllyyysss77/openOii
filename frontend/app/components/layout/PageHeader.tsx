@@ -11,6 +11,8 @@ export function PageHeader({
 	description,
 	meta,
 	actions,
+	actionsAlign = "below",
+	divider = true,
 	className,
 }: {
 	eyebrow?: string;
@@ -18,20 +20,27 @@ export function PageHeader({
 	description?: string;
 	meta?: ReactNode;
 	actions?: ReactNode;
+	/** "below"：移动端 actions 换行到标题块下、lg 起同行（列表/详情页默认）；"title"：actions 全断点钉在标题行（首页 chip 行，避免挤占垂直空间） */
+	actionsAlign?: "title" | "below";
+	/** 底部分隔线；默认开，与列表/详情页一致 */
+	divider?: boolean;
 	className?: string;
 }) {
 	return (
 		<header
 			className={clsx(
-				"flex flex-col gap-2 border-b border-base-content/10 pb-3",
-				"lg:flex-row lg:items-end lg:justify-between",
+				"flex gap-2",
+				divider && "border-b border-base-content/10 pb-3",
+				actionsAlign === "title"
+					? "flex-row flex-wrap items-center justify-between"
+					: "flex-col lg:flex-row lg:items-end lg:justify-between",
 				className,
 			)}
 			data-shell="page-header"
 		>
 			<div className="min-w-0">
 				{eyebrow ? (
-					<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/55">
+					<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-bc-muted">
 						{eyebrow}
 					</p>
 				) : null}
@@ -40,13 +49,13 @@ export function PageHeader({
 						{title}
 					</h1>
 					{meta ? (
-						<div className="pb-0.5 font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/45">
+						<div className="pb-0.5 font-mono text-[length:var(--text-2xs)] tabular-nums text-bc-muted">
 							{meta}
 						</div>
 					) : null}
 				</div>
 				{description ? (
-					<p className="m-0 mt-1 max-w-2xl text-[length:var(--text-sm)] text-base-content/65 text-pretty">
+					<p className="m-0 mt-1 max-w-2xl text-[length:var(--text-sm)] text-bc-muted text-pretty">
 						{description}
 					</p>
 				) : null}
@@ -66,6 +75,11 @@ export function PageContent({
 }: {
 	children: ReactNode;
 	className?: string;
+	/**
+	 * 宽度约定：普通页一律 "default"（max-w-6xl）。
+	 * "wide"（max-w-7xl）仅限重表格页（目前只有 ProjectsPage）——跨页导航时内容左边缘会平移，这是刻意取舍，勿为对齐改掉。
+	 * "narrow" 留给纯文本/表单页。
+	 */
 	width?: "default" | "wide" | "narrow";
 }) {
 	const max =
@@ -77,7 +91,8 @@ export function PageContent({
 	return (
 		<div
 			className={clsx(
-				"mx-auto flex w-full flex-col gap-[var(--space-3)] px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)]",
+				// 区块间用 --rhythm-zone（比块内 --rhythm-block 宽一档），页面才有节奏
+				"mx-auto flex w-full flex-col gap-[var(--rhythm-zone)] px-[var(--space-3)] py-[var(--space-3)] sm:px-[var(--space-4)]",
 				max,
 				className,
 			)}

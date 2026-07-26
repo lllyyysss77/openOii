@@ -43,14 +43,14 @@ export function SharedCharacterCard({
 					</div>
 				)}
 				<div className="min-w-0 flex-1">
-					<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/40">
+					<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-bc-muted">
 						cast
 					</p>
 					<h3 className="m-0 truncate font-heading text-[length:var(--text-sm)] font-bold">
 						{character.name}
 					</h3>
 				</div>
-				<span className="shrink-0 font-mono text-[length:var(--text-2xs)] tabular-nums text-base-content/35">
+				<span className="shrink-0 font-mono text-[length:var(--text-2xs)] tabular-nums text-bc-muted">
 					v{character.version}
 				</span>
 			</div>
@@ -60,7 +60,7 @@ export function SharedCharacterCard({
 					{tags.slice(0, 3).map((tag) => (
 						<span
 							key={tag}
-							className="rounded-full border border-primary/15 bg-primary/10 px-1.5 py-px font-bold text-[length:var(--text-2xs)] text-primary"
+							className="rounded-full border border-primary/15 bg-primary/10 px-1.5 py-px font-bold text-[length:var(--text-2xs)] text-primary-ink"
 						>
 							{tag}
 						</span>
@@ -69,11 +69,11 @@ export function SharedCharacterCard({
 			) : null}
 
 			{character.description ? (
-				<p className="m-0 line-clamp-2 flex-1 text-[length:var(--text-2xs)] text-base-content/55">
+				<p className="m-0 line-clamp-2 flex-1 text-[length:var(--text-2xs)] text-bc-muted">
 					{character.description}
 				</p>
 			) : (
-				<p className="m-0 flex-1 text-[length:var(--text-2xs)] text-base-content/35">
+				<p className="m-0 flex-1 text-[length:var(--text-2xs)] text-bc-muted">
 					无描述
 				</p>
 			)}

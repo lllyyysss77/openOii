@@ -9,6 +9,16 @@
     --cmyk-cyan: 0.55 0.14 180;
     --cmyk-magenta: 0.55 0.26 330;
 
+    /* —— Text contrast tokens (theme-aware) ——
+     * 同一语义在两套主题达到同一对比目标，而不是同一 alpha 数值。
+     * muted: 次级正文/元信息，全部 base 表面 ≥4.5:1
+     * subtle: 纯装饰标签，≥3:1
+     * primary-ink: 品牌黄作为「文字」的形态；填充色继续用 --p
+     */
+    --bc-muted: oklch(var(--bc) / 0.72);
+    --bc-subtle: oklch(var(--bc) / 0.55);
+    --primary-ink: #7a5a00;
+
     /* —— Spacing (dense default; use for new chrome) —— */
     --space-0: 0;
     --space-1: 0.25rem; /* 4 */
@@ -58,6 +68,13 @@
     --touch-target-min: 44px; /* primary actions, WCAG-friendly */
     --touch-target-dense: 32px; /* chrome chips only; not sole target for critical ops */
 
+    /* —— Vertical rhythm（页面纵向节奏三档：区块间 > 块间 > 条目间）——
+     * 单一 gap 铺到底没有节奏；相关元素紧凑、独立区块宽松。
+     */
+    --rhythm-zone: 1.25rem; /* 20 — DeskSection 之间 */
+    --rhythm-block: var(--space-3); /* 12 — 区块内部块间 */
+    --rhythm-item: var(--space-2); /* 8 — 兄弟条目间 */
+
     /* —— Motion —— */
     --duration-fast: 150ms;
     --duration-normal: 200ms;
@@ -94,6 +111,16 @@
   [data-theme="doodle-dark"] {
     --cmyk-cyan: 0.6 0.12 195;
     --cmyk-magenta: 0.6 0.24 340;
+    --bc-muted: oklch(var(--bc) / 0.62);
+    --bc-subtle: oklch(var(--bc) / 0.45);
+    --primary-ink: #f0c050;
+  }
+
+  /* 触屏下密集档自动升到无障碍下限；桌面密集布局不受影响 */
+  @media (pointer: coarse) {
+    :root {
+      --touch-target-dense: 44px;
+    }
   }
 }
 

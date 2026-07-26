@@ -62,7 +62,7 @@ describe("StagePipeline", () => {
 		);
 	});
 
-	it("exposes unified workbench tools when handlers are provided", async () => {
+	it("exposes unified workbench tools through the overflow menu", async () => {
 		const user = userEvent.setup();
 		const onOpenVersions = vi.fn();
 		const onOpenConsistency = vi.fn();
@@ -74,12 +74,51 @@ describe("StagePipeline", () => {
 			onExport,
 		});
 
-		await user.click(screen.getByRole("button", { name: "打开版本对比" }));
-		await user.click(screen.getByRole("button", { name: "打开一致性报告" }));
-		await user.click(screen.getByRole("button", { name: "导出 Webtoon 长图" }));
+		// 溢出菜单触发器在所有视口可见（不再是 hidden sm:flex 的按钮组）
+		const trigger = screen.getByRole("button", { name: "工作台工具" });
+		expect(trigger.className).not.toContain("hidden");
+
+		await user.click(trigger);
+		await user.click(screen.getByRole("menuitem", { name: "打开版本对比" }));
+		await user.click(screen.getByRole("menuitem", { name: "打开一致性报告" }));
+		await user.click(screen.getByRole("menuitem", { name: "导出 Webtoon 长图" }));
 
 		expect(onOpenVersions).toHaveBeenCalledTimes(1);
 		expect(onOpenConsistency).toHaveBeenCalledTimes(1);
 		expect(onExport).toHaveBeenCalledTimes(1);
+	});
+
+	it("omits the overflow menu when no tool handlers are provided", () => {
+		renderStagePipeline();
+
+		expect(
+			screen.queryByRole("button", { name: "工作台工具" }),
+		).not.toBeInTheDocument();
+	});
+
+	it("disables the export menu item while generating", async () => {
+		const user = userEvent.setup();
+		const onExport = vi.fn();
+
+		renderStagePipeline({ onExport, isGenerating: true });
+
+		await user.click(screen.getByRole("button", { name: "工作台工具" }));
+		const exportItem = screen.getByRole("menuitem", {
+			name: "导出 Webtoon 长图",
+		});
+
+		expect(exportItem).toBeDisabled();
+		await user.click(exportItem);
+		expect(onExport).not.toHaveBeenCalled();
+	});
+
+	it("keeps the status label text visible on all viewports", () => {
+		renderStagePipeline({
+			workbenchStatus: getWorkbenchStatusMeta("ready"),
+		});
+
+		const label = screen.getByText("成片可用");
+		// <sm 不再只剩色点：文案不能带 hidden
+		expect(label.className).not.toContain("hidden");
 	});
 });

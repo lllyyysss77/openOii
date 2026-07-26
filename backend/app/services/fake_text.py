@@ -377,32 +377,6 @@ class FakeTextService:
             "表情明确，适合 Fake 占位图与本地一致性检查。"
         )
 
-    def _reimagine_response(self, prompt_text: str) -> str:
-        brief_match = re.search(r"参考内容：\s*(.+?)\n\n只输出", prompt_text, re.S)
-        brief = brief_match.group(1).strip() if brief_match else prompt_text[:200]
-        first_line = brief.splitlines()[0][:120] if brief else "本地 Fake 拉片"
-        data = {
-            "narrative_arc": first_line or "本地 Fake 叙事弧",
-            "time_structure": "线性短片",
-            "characters": "小欧、调试精灵",
-            "scenes": "创作工作室 / 预览屏幕",
-            "props": "播放按钮徽章、场记板",
-            "shot_types": "中景/特写交替",
-            "camera_moves": "推拉 + 跟随",
-            "framing": "主体居中，适度负空间",
-            "pacing": "均匀推进",
-            "color_grade": "中性偏暖",
-            "lighting": "柔和屏幕光",
-            "sound_design": "环境音 + 轻提示音",
-            "music": "轻快 ambient",
-            "dialogue_tone": "口语简洁",
-            "visual_style": "清爽漫画风",
-            "effects": "少量高亮转场",
-            "emotion": "好奇到安心",
-            "hooks": "开场按下生成按钮",
-        }
-        return self._json_text(data)
-
     def _onboarding_response(self, payload: dict[str, Any]) -> str:
         project = self._project_from_payload(payload)
         title = str(project.get("title") or "Fake 本地测试短片")
@@ -689,13 +663,6 @@ class FakeTextService:
             or "extract key visual traits" in combined
         ):
             return self._visual_notes_response(prompt_text)
-        if (
-            "动画导演助理" in combined
-            or "拉片" in combined
-            or "schema keys" in combined
-            or "参考内容：" in prompt_text
-        ):
-            return self._reimagine_response(prompt_text)
         if (
             "criticagent" in combined
             or "you evaluate visual" in combined

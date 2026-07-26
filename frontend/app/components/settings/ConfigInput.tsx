@@ -64,7 +64,7 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
 						type="button"
 						onClick={handleToggleReveal}
 						disabled={isRevealing}
-						className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-base-content/55 transition-colors hover:text-accent"
+						className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-bc-muted transition-colors hover:text-accent"
 						title={isRevealed ? "隐藏真实值" : "显示真实值"}
 					>
 						{isRevealing ? (
@@ -77,7 +77,7 @@ export function ConfigInput({ item, value, onChange }: ConfigInputProps) {
 					</button>
 				</div>
 				{!isRevealed && isMasked && (
-					<p className="m-0 text-[length:var(--text-2xs)] text-base-content/50">
+					<p className="m-0 text-[length:var(--text-2xs)] text-bc-muted">
 						已配置（显示脱敏值），点击眼睛图标可查看真实值
 					</p>
 				)}

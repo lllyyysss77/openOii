@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+from urllib.parse import urlsplit, urlunsplit
 
 import asyncpg
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
+
+logger = logging.getLogger(__name__)
 
 _checkpointer_setup_states: dict[str, bool] = {}
 _checkpointer_setup_locks: dict[str, asyncio.Lock] = {}
@@ -62,6 +66,19 @@ def _normalize_checkpointer_conn_string(database_url: str) -> str:
     return database_url
 
 
+def redact_credentials(conn_str: str) -> str:
+    """去掉连接串中的账号口令，避免凭据进入日志。"""
+    parts = urlsplit(conn_str)
+    if not parts.hostname:
+        return conn_str
+    netloc = parts.hostname
+    if parts.username:
+        netloc = f"{parts.username}:***@{netloc}"
+    if parts.port:
+        netloc = f"{netloc}:{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
 async def ensure_postgres_checkpointer_setup(database_url: str) -> None:
     if not database_url.startswith(("postgres://", "postgresql://", "postgresql+")):
         return
@@ -75,8 +92,10 @@ async def ensure_postgres_checkpointer_setup(database_url: str) -> None:
         if _checkpointer_setup_states.get(conn_str):
             return
 
-        import logging
-        logging.error(f'ensure_postgres_checkpointer_setup: connecting to {conn_str}')
+        logger.debug(
+            "ensure_postgres_checkpointer_setup: connecting to %s",
+            redact_credentials(conn_str),
+        )
         conn = await asyncpg.connect(conn_str)
         try:
             for statement in _BOOTSTRAP_STATEMENTS:

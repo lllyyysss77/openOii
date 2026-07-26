@@ -1,0 +1,25 @@
+import { useSyncExternalStore } from "react";
+
+// 与 Tailwind lg 断点对齐：<1024px 视为移动工作台（不挂载 tldraw）
+const MOBILE_QUERY = "(max-width: 1023.98px)";
+
+function canMatchMedia(): boolean {
+	return typeof window !== "undefined" && typeof window.matchMedia === "function";
+}
+
+function subscribe(onChange: () => void): () => void {
+	if (!canMatchMedia()) return () => {};
+	const mql = window.matchMedia(MOBILE_QUERY);
+	mql.addEventListener("change", onChange);
+	return () => mql.removeEventListener("change", onChange);
+}
+
+function getSnapshot(): boolean {
+	// 测试环境（jsdom）无 matchMedia 时按桌面处理，保持既有桌面行为
+	if (!canMatchMedia()) return false;
+	return window.matchMedia(MOBILE_QUERY).matches;
+}
+
+export function useIsMobileWorkbench(): boolean {
+	return useSyncExternalStore(subscribe, getSnapshot, () => false);
+}

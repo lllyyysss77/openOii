@@ -4,7 +4,6 @@ import json
 
 import pytest
 
-from app.agents.base import TargetIds
 from app.agents.review_rules import (
     ALLOWED_START_AGENTS,
     ReviewAgent,

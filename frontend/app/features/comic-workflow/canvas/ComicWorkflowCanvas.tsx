@@ -12,6 +12,7 @@ import { ImagePreviewModal, VideoPreviewModal } from "~/components/canvas/Previe
 import { canvasEvents } from "~/components/canvas/canvasEvents";
 import { projectsApi } from "~/services/api";
 import { useEditorStore, useShallow } from "~/stores/editorStore";
+import { useThemeStore } from "~/stores/themeStore";
 import { toast } from "~/utils/toast";
 import type { ComicWorkflowGraph } from "../graph/types";
 import { buildComicWorkflow } from "../graph/buildComicWorkflow";
@@ -185,6 +186,13 @@ export function ComicWorkflowCanvas({
 	const handleMount = useCallback(
 		(editor: Editor) => {
 			editorRef.current = editor;
+			// 同步 tldraw 自身的明暗态（shape 内文字已显式走 daisyUI 令牌，
+			// 这里兜底画布背景/选择框等 tldraw 原生 UI 的配色）
+			editor.user.updateUserPreferences({
+				colorScheme: useThemeStore.getState().theme.endsWith("dark")
+					? "dark"
+					: "light",
+			});
 			if (graph && layout) {
 				syncTldrawProjection({ editor, graph, layout, interactionMode });
 				lastSignatureRef.current = `${graphSignature}:${interactionMode}`;
@@ -196,6 +204,13 @@ export function ComicWorkflowCanvas({
 		},
 		[graph, graphSignature, interactionMode, layout],
 	);
+
+	const theme = useThemeStore((s) => s.theme);
+	useEffect(() => {
+		editorRef.current?.user.updateUserPreferences({
+			colorScheme: theme.endsWith("dark") ? "dark" : "light",
+		});
+	}, [theme]);
 
 	useEffect(() => {
 		if (!isInitialized || !graph || !layout) return;
@@ -223,7 +238,7 @@ export function ComicWorkflowCanvas({
 
 	if (isLoading || !graph || !layout) {
 		return (
-			<div className="flex h-full w-full items-center justify-center bg-base-100 text-sm text-base-content/50">
+			<div className="flex h-full w-full items-center justify-center bg-base-100 text-sm text-bc-muted">
 				正在加载工作流...
 			</div>
 		);
@@ -282,7 +297,6 @@ export function ComicWorkflowCanvas({
 					src={previewVideo.src}
 					title={previewVideo.title}
 					onClose={() => setPreviewVideo(null)}
-					showDownload={false}
 				/>
 			) : null}
 		</>

@@ -328,7 +328,7 @@ export function SettingsModal() {
 				value={String(formState[item.key] ?? "")}
 				onChange={handleInputChange}
 			/>
-			<p className="mt-1.5 text-[length:var(--text-2xs)] text-base-content/55">
+			<p className="mt-1.5 text-[length:var(--text-2xs)] text-bc-muted">
 				{getConfigDescription(item.key)}
 			</p>
 		</div>
@@ -374,7 +374,7 @@ export function SettingsModal() {
 				/>
 				<div className="min-w-0">
 					<div className="text-[length:var(--text-sm)] font-bold">{title}</div>
-					<div className="text-[length:var(--text-2xs)] text-base-content/60">
+					<div className="text-[length:var(--text-2xs)] text-bc-muted">
 						{desc}
 					</div>
 				</div>
@@ -438,7 +438,7 @@ export function SettingsModal() {
 							{activeSection.items
 								.filter((i) => i.key.toLowerCase().startsWith("fake_text_"))
 								.map(renderConfigItem)}
-							<p className="m-0 px-1 text-[length:var(--text-2xs)] text-base-content/55">
+							<p className="m-0 px-1 text-[length:var(--text-2xs)] text-bc-muted">
 								启用后生成链路不会调用外部文本生成 API。
 							</p>
 						</div>
@@ -489,7 +489,7 @@ export function SettingsModal() {
 				/>
 				<div className="min-w-0">
 					<div className="text-[length:var(--text-sm)] font-bold">{title}</div>
-					<div className="text-[length:var(--text-2xs)] text-base-content/60">
+					<div className="text-[length:var(--text-2xs)] text-bc-muted">
 						{desc}
 					</div>
 				</div>
@@ -542,7 +542,7 @@ export function SettingsModal() {
 						</h4>
 						<div className="space-y-2 rounded-r-[var(--radius-md)] bg-accent/5 py-1.5 pl-2.5">
 							{fakeItems.map(renderConfigItem)}
-							<p className="m-0 px-1 text-[length:var(--text-2xs)] text-base-content/55">
+							<p className="m-0 px-1 text-[length:var(--text-2xs)] text-bc-muted">
 								未配置固定 URL 时会返回内置 SVG 占位图。
 							</p>
 						</div>
@@ -551,7 +551,7 @@ export function SettingsModal() {
 
 				{commonItems.length > 0 && (
 					<div className="space-y-2">
-						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-base-content/70">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-bc-muted">
 							<WrenchScrewdriverIcon className="h-3.5 w-3.5" />
 							通用配置
 						</h4>
@@ -619,7 +619,7 @@ export function SettingsModal() {
 				/>
 				<div className="min-w-0">
 					<div className="text-[length:var(--text-sm)] font-bold">{title}</div>
-					<div className="text-[length:var(--text-2xs)] text-base-content/60">
+					<div className="text-[length:var(--text-2xs)] text-bc-muted">
 						{desc}
 					</div>
 				</div>
@@ -687,7 +687,7 @@ export function SettingsModal() {
 
 				{commonItems.length > 0 && (
 					<div className="space-y-2">
-						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-base-content/70">
+						<h4 className="m-0 flex items-center gap-1.5 text-[length:var(--text-xs)] font-bold text-bc-muted">
 							<WrenchScrewdriverIcon className="h-3.5 w-3.5" />
 							通用配置
 						</h4>
@@ -722,7 +722,7 @@ export function SettingsModal() {
 				</div>
 
 				{activeSection.items.length === 0 && (
-					<div className="py-8 text-center text-[length:var(--text-xs)] text-base-content/50">
+					<div className="py-8 text-center text-[length:var(--text-xs)] text-bc-muted">
 						<InformationCircleIcon className="mx-auto mb-1.5 h-8 w-8 opacity-50" />
 						<p className="m-0">此分类暂无配置项</p>
 					</div>

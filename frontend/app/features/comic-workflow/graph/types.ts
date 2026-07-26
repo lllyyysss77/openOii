@@ -79,6 +79,8 @@ export interface OutputWorkflowNode extends ComicWorkflowNodeBase {
 	projectId: number;
 	videoUrl: string | null;
 	blockingClips: BlockingClip[];
+	/** 历史导出产物（Webtoon 长图等），成片卡上直接可下 */
+	exports: string[];
 }
 
 export type ComicWorkflowNode =

@@ -36,6 +36,8 @@ class ProjectConsistencyRead(BaseModel):
     overall_score: float = Field(ge=0.0, le=100.0)
     character_reports: list[CharacterConsistencyRead] = Field(default_factory=list)
     evaluated_at: datetime
+    # 由 ConsistencyEvalService 在报告落库后回填，持久化的 report_data 中不含该字段
+    eval_id: int | None = None
 
 
 class ConsistencyEvalResponse(BaseModel):

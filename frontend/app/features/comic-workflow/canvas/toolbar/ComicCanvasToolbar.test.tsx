@@ -45,6 +45,17 @@ function renderToolbar(overrides = {}) {
 }
 
 describe("ComicCanvasToolbar", () => {
+	it("uses the dropdown z token and only shows alongside the canvas (lg+)", () => {
+		renderToolbar();
+
+		const toolbar = screen.getByRole("toolbar", { name: "画布工具栏" });
+		// 不再裸写 z-50 压住 z-20 的抽屉；<lg 跟随画布一起不显示
+		expect(toolbar.className).toContain("z-[var(--z-dropdown)]");
+		expect(toolbar.className).not.toContain("z-50");
+		expect(toolbar.className).toContain("hidden");
+		expect(toolbar.className).toContain("lg:flex");
+	});
+
 	it("does not render the removed consistency evaluation button", () => {
 		renderToolbar();
 

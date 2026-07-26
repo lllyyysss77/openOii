@@ -91,13 +91,13 @@ export function WorkflowInspector({
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-base-100" data-shell="inspector">
 			<div className="border-b border-base-content/10 px-2 py-1.5">
-				<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-base-content/40">
+				<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase text-bc-muted">
 					{selectedNode.kind}
 				</p>
 				<h2 className="m-0 truncate font-heading text-[length:var(--text-sm)] font-bold">
 					{selectedNode.title}
 				</h2>
-				<p className="m-0 truncate text-[length:var(--text-2xs)] text-base-content/50">
+				<p className="m-0 truncate text-[length:var(--text-2xs)] text-bc-muted">
 					{selectedNode.subtitle}
 				</p>
 			</div>
@@ -110,7 +110,7 @@ export function WorkflowInspector({
 						className={`touch-target-dense flex-1 rounded-[var(--radius-sm)] text-[length:var(--text-2xs)] font-semibold transition-colors duration-[var(--duration-fast)] ${
 							activeTab === tab
 								? "bg-primary text-primary-content"
-								: "text-base-content/55 hover:bg-base-200"
+								: "text-bc-muted hover:bg-base-200"
 						}`}
 						onClick={() => setActiveTab(tab)}
 					>
@@ -209,7 +209,7 @@ function FieldList({ items }: { items: Array<[string, string | number]> }) {
 					key={label}
 					className="flex items-start justify-between gap-3 border-b border-base-content/8 pb-1.5 text-[length:var(--text-sm)]"
 				>
-					<span className="font-mono text-[length:var(--text-2xs)] uppercase text-base-content/40">
+					<span className="font-mono text-[length:var(--text-2xs)] uppercase text-bc-muted">
 						{label}
 					</span>
 					<span className="min-w-0 text-right text-base-content/75">{value}</span>
@@ -246,7 +246,7 @@ function ContentTab({
 		return <ShotDraftForm shot={node.shot} disabled={structureLocked} />;
 	}
 	return (
-		<div className="space-y-3 text-sm text-base-content/60">
+		<div className="space-y-3 text-sm text-bc-muted">
 			<p className="m-0">输出节点不直接编辑内容。</p>
 			{node.blockingClips.length > 0 ? (
 				<div className="rounded-lg border border-warning/25 bg-warning/10 p-3 text-warning">
@@ -536,13 +536,13 @@ function MultiShotActions({
 
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-base-100 p-2" data-shell="inspector-multi">
-			<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-base-content/40">
+			<p className="m-0 font-mono text-[length:var(--text-2xs)] uppercase tracking-wide text-bc-muted">
 				multi-shot
 			</p>
 			<h2 className="m-0 font-heading text-[length:var(--text-sm)] font-bold">
 				已选 {shotIds.length} 格
 			</h2>
-			<p className="m-0 mt-1 text-[length:var(--text-2xs)] text-base-content/55">
+			<p className="m-0 mt-1 text-[length:var(--text-2xs)] text-bc-muted">
 				批量只动选中格 · 不改其他分镜
 			</p>
 			<div className="mt-2 space-y-1.5">
@@ -620,7 +620,7 @@ function ActionsTab({
 	if (node.kind === "brief") {
 		return (
 			<ActionStack>
-				<p className="m-0 text-sm text-base-content/55">
+				<p className="m-0 text-sm text-bc-muted">
 					Brief 只在内容页编辑。生成、恢复和停止由对话面板控制。
 				</p>
 			</ActionStack>
@@ -643,7 +643,7 @@ function ActionsTab({
 						});
 					}}
 				/>
-				<p className="m-0 text-xs text-base-content/45">
+				<p className="m-0 text-xs text-bc-muted">
 					输出节点状态由镜头和合成结果决定，不在画布里手动改写。
 				</p>
 			</ActionStack>
@@ -744,7 +744,7 @@ function ActionsTab({
 				</div>
 			) : null}
 			{shotCellLabel ? (
-				<div className="rounded-[var(--radius-md)] border border-accent/30 bg-accent/10 px-2 py-1.5 text-[length:var(--text-2xs)] leading-relaxed text-base-content/70">
+				<div className="rounded-[var(--radius-md)] border border-accent/30 bg-accent/10 px-2 py-1.5 text-[length:var(--text-2xs)] leading-relaxed text-bc-muted">
 					<strong className="text-accent">{shotCellLabel}</strong>
 					{" · "}
 					重做只刷新这一格，不影响其他分镜与角色资产。也可在对话里绑定本格发反馈；可多选多格批量重做。
@@ -908,7 +908,7 @@ function TextInput({
 }) {
 	return (
 		<label className="block">
-			<span className="mb-1 block text-xs font-mono uppercase text-base-content/45">
+			<span className="mb-1 block text-xs font-mono uppercase text-bc-muted">
 				{label}
 			</span>
 			<input
@@ -931,7 +931,7 @@ function NumberInput({
 }) {
 	return (
 		<label className="block">
-			<span className="mb-1 block text-xs font-mono uppercase text-base-content/45">
+			<span className="mb-1 block text-xs font-mono uppercase text-bc-muted">
 				{label}
 			</span>
 			<input
@@ -961,7 +961,7 @@ function TextArea({
 }) {
 	return (
 		<label className="block">
-			<span className="mb-1 block text-xs font-mono uppercase text-base-content/45">
+			<span className="mb-1 block text-xs font-mono uppercase text-bc-muted">
 				{label}
 			</span>
 			<textarea

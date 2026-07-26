@@ -428,6 +428,21 @@ vi.mock('~/components/layout/StageView', () => ({
   StageView: () => <div data-testid="stage-view" />,
 }));
 
+vi.mock('~/features/comic-workflow/mobile/MobileWorkbenchPreview', () => ({
+  MobileWorkbenchPreview: ({
+    workbenchStatus,
+  }: {
+    workbenchStatus?: { state: string };
+  }) => (
+    <div
+      data-testid="mobile-workbench-preview"
+      data-workbench-status={workbenchStatus?.state}
+    >
+      完整画布编辑请用桌面端打开
+    </div>
+  ),
+}));
+
 vi.mock('~/components/settings/SettingsModal', () => ({
   SettingsModal: () => null,
 }));
@@ -701,18 +716,19 @@ describe('ProjectPage live hydration', () => {
     expect(screen.queryByTestId('workspace-sidebar')).not.toBeInTheDocument();
   });
 
-  it('keeps the loading page while project workspace resources are loading', () => {
+  it('renders the workspace progressively while secondary resources are still loading', () => {
     resourceQueryState = {
       charactersLoading: true,
-      shotsLoading: false,
-      messagesLoading: false,
+      shotsLoading: true,
+      messagesLoading: true,
     };
 
     render(<ProjectPage />);
 
-    expect(screen.getByText('正在加载项目…')).toBeInTheDocument();
-    expect(screen.queryByTestId('stage-view')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('workspace-sidebar')).not.toBeInTheDocument();
+    // 只等项目主数据；角色/分镜/消息各区域自行渐进加载
+    expect(screen.queryByText('正在加载项目…')).not.toBeInTheDocument();
+    expect(screen.getByTestId('stage-view')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-sidebar')).toBeInTheDocument();
   });
 
   it('clears project-scoped canvas state when route project changes', async () => {
@@ -763,6 +779,70 @@ describe('ProjectPage live hydration', () => {
 
     expect(screen.getByText('项目未找到')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '返回首页' })).toBeInTheDocument();
+  });
+
+  it('renders the not found page only for a real 404 project error', () => {
+    projectQueryState = {
+      isLoading: false,
+      error: new ApiError({ code: 'not_found', message: '项目不存在', status: 404 }),
+    };
+    currentProjectData = undefined as never;
+
+    render(<ProjectPage />);
+
+    expect(screen.getByText('项目未找到')).toBeInTheDocument();
+    expect(screen.queryByText('无法加载项目')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重试' })).not.toBeInTheDocument();
+  });
+
+  it('renders a persistent error panel with retry for non-404 project errors', async () => {
+    const user = userEvent.setup();
+    projectQueryState = {
+      isLoading: false,
+      error: new ApiError({ code: 'server_error', message: '服务器开小差了', status: 500 }),
+    };
+    currentProjectData = undefined as never;
+
+    render(<ProjectPage />);
+
+    expect(screen.getByText('无法加载项目')).toBeInTheDocument();
+    expect(screen.getByText('服务器开小差了')).toBeInTheDocument();
+    expect(screen.queryByText('项目未找到')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '重试' }));
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project', 9] });
+  });
+
+  it('mounts the mobile preview instead of the canvas below the lg breakpoint', () => {
+    const mediaQueryList = {
+      matches: true,
+      media: '(max-width: 1023.98px)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal('matchMedia', vi.fn(() => mediaQueryList));
+
+    try {
+      render(<ProjectPage />);
+
+      // <lg：不挂载 tldraw 画布，改为只读预览 + 侧栏上下分栏
+      expect(screen.queryByTestId('stage-view')).not.toBeInTheDocument();
+      expect(screen.getByTestId('mobile-workbench-preview')).toBeInTheDocument();
+      expect(screen.getByText('完整画布编辑请用桌面端打开')).toBeInTheDocument();
+      expect(screen.getByTestId('workspace-sidebar')).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps the desktop canvas mounted at lg and above', () => {
+    render(<ProjectPage />);
+
+    expect(screen.getByTestId('stage-view')).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('mobile-workbench-preview'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows a toast when the project query errors', async () => {

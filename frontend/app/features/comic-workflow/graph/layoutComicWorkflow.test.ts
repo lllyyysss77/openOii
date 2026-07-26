@@ -98,7 +98,7 @@ function shot(id: number, order: number): Shot {
 }
 
 describe("layoutComicWorkflow", () => {
-	it("lays out the four frames in workflow order", () => {
+	it("composes magazine zones: left column stack, center grid, right delivery", () => {
 		const graph = buildComicWorkflow({
 			project: project(),
 			characters: [character(1)],
@@ -108,6 +108,7 @@ describe("layoutComicWorkflow", () => {
 		});
 
 		const layout = layoutComicWorkflow(graph);
+		const [brief, elements, shotline, output] = layout.frames;
 
 		expect(layout.frames.map((frame) => frame.section)).toEqual([
 			"brief",
@@ -115,9 +116,16 @@ describe("layoutComicWorkflow", () => {
 			"shotline",
 			"output",
 		]);
-		expect(layout.frames[1].x).toBeGreaterThan(layout.frames[0].x);
-		expect(layout.frames[2].y).toBeGreaterThan(layout.frames[1].y);
-		expect(layout.frames[3].x).toBeGreaterThan(layout.frames[2].x);
+		// 左列：Brief 与角色库同 x 同宽、上下堆叠
+		expect(elements.x).toBe(brief.x);
+		expect(elements.w).toBe(brief.w);
+		expect(elements.y).toBeGreaterThan(brief.y + brief.h);
+		// 中列在左列右侧，右列在中列右侧
+		expect(shotline.x).toBeGreaterThan(brief.x + brief.w);
+		expect(output.x).toBeGreaterThan(shotline.x + shotline.w);
+		// 三列同顶对齐
+		expect(shotline.y).toBe(brief.y);
+		expect(output.y).toBe(brief.y);
 	});
 
 	it("lays out ordered shots left-to-right in a 3-column grid", () => {
@@ -202,7 +210,7 @@ describe("layoutComicWorkflow", () => {
 		const shotFrame = layout.frames.find((frame) => frame.section === "shotline");
 
 		expect(shotNode?.w).toBe(220);
-		expect(shotNode?.h).toBe(300);
+		expect(shotNode?.h).toBe(390);
 		expect(shotFrame?.h).toBeGreaterThanOrEqual(360);
 	});
 });

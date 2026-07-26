@@ -70,7 +70,7 @@ export function StyleTemplateGrid({
           ))}
         </div>
       ) : templates.length === 0 ? (
-        <div className="text-center py-8 text-base-content/60">
+        <div className="text-center py-8 text-bc-muted">
           {filter === "custom"
             ? "暂无自定义风格，点击下方按钮创建"
             : "暂无可用风格模板"}
