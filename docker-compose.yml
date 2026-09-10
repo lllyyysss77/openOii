@@ -28,7 +28,7 @@ services:
       retries: 5
 
   backend:
-    image: ghcr.io/xeron2000/openoii-backend:latest
+    image: ghcr.io/xeronsh/openoii-backend:latest
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,7 +56,7 @@ services:
     #   - your_external_network
 
   frontend:
-    image: ghcr.io/xeron2000/openoii-frontend:latest
+    image: ghcr.io/xeronsh/openoii-frontend:latest
     depends_on:
       - backend
     ports:
